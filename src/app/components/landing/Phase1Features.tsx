@@ -67,7 +67,7 @@ export function Phase1Features() {
   const inView = useInView(ref, { once: true, margin: "-80px" });
 
   return (
-    <section id="features" ref={ref} className="relative py-24 px-4">
+    <section id="features" ref={ref} className="relative py-24 px-4 scroll-mt-24">
       <div
         className="absolute inset-0 pointer-events-none"
         style={{

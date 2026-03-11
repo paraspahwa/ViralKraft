@@ -7,7 +7,7 @@ const navLinks = [
   { label: "Features", href: "#features" },
   { label: "How It Works", href: "#how-it-works" },
   { label: "Pricing", href: "#pricing" },
-  { label: "RetentionAI", href: "#retention", badge: "NEW" },
+  { label: "RetentionAI", href: "#retentionai", badge: "NEW" },
 ];
 
 export function AppNavbar() {
@@ -15,6 +15,7 @@ export function AppNavbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const isHome = location.pathname === "/";
   const isDashboard = location.pathname === "/dashboard" || location.pathname === "/create";
 
   useEffect(() => {
@@ -63,7 +64,7 @@ export function AppNavbar() {
               {navLinks.map((link) => (
                 <a
                   key={link.label}
-                  href={link.href}
+                  href={isHome ? link.href : `/${link.href}`}
                   className="flex items-center gap-1.5 text-white/60 hover:text-white transition-colors duration-200 text-sm"
                 >
                   {link.label}
@@ -159,7 +160,7 @@ export function AppNavbar() {
               {navLinks.map((link) => (
                 <a
                   key={link.label}
-                  href={link.href}
+                  href={isHome ? link.href : `/${link.href}`}
                   onClick={() => setMenuOpen(false)}
                   className="text-white/60 hover:text-white text-sm flex items-center gap-2"
                 >

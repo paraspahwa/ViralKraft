@@ -24,7 +24,7 @@ export function RetentionAI() {
   const [activeInsight, setActiveInsight] = useState(0);
 
   return (
-    <section id="retention" ref={ref} className="relative py-24 px-4">
+    <section id="retentionai" ref={ref} className="relative py-24 px-4 scroll-mt-24">
       {/* Background */}
       <div
         className="absolute inset-0 pointer-events-none"
