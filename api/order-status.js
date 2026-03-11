@@ -1,6 +1,19 @@
 import { handleOptions, sendJson } from "./_lib/http.js";
 import { getSupabaseAdmin } from "./_lib/supabase.js";
 
+function getBearerToken(authHeader) {
+  if (!authHeader || typeof authHeader !== "string") {
+    return null;
+  }
+
+  const lower = authHeader.toLowerCase();
+  if (!lower.startsWith("bearer ")) {
+    return null;
+  }
+
+  return authHeader.slice(7).trim() || null;
+}
+
 export default async function handler(req, res) {
   if (handleOptions(req, res)) {
     return;
@@ -30,6 +43,25 @@ export default async function handler(req, res) {
     if (orderError || !orderRow) {
       sendJson(res, 404, { error: "Order not found" });
       return;
+    }
+
+    if (orderRow.user_id) {
+      const token = getBearerToken(req.headers.authorization);
+      if (!token) {
+        sendJson(res, 401, { error: "Authorization token is required for this order" });
+        return;
+      }
+
+      const { data: userData, error: userError } = await supabase.auth.getUser(token);
+      if (userError || !userData?.user) {
+        sendJson(res, 401, { error: "Invalid authorization token" });
+        return;
+      }
+
+      if (userData.user.id !== orderRow.user_id) {
+        sendJson(res, 403, { error: "Not authorized to access this order" });
+        return;
+      }
     }
 
     let subscriptionStatus = null;

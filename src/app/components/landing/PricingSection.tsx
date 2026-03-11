@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, useInView } from "motion/react";
 import { useNavigate } from "react-router";
 import { Check, Sparkles, Zap, Building2 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,7 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Button } from "../ui/button";
+import { getSupabaseBrowserClient } from "../../lib/supabaseClient";
 
 type BillingCycle = "monthly" | "yearly";
 
@@ -58,6 +60,11 @@ type CheckoutState = {
   title: string;
   message: string;
   status: "pending" | "success" | "failed";
+};
+
+type UserContext = {
+  userId: string | null;
+  accessToken: string | null;
 };
 
 type DisplayPlan = {
@@ -135,6 +142,8 @@ const displayPlans: DisplayPlan[] = [
   }
 ];
 
+const CHECKOUT_ORDER_STORAGE_KEY = "viralkraft:lastCheckoutOrder";
+
 function formatCurrency(currency: "INR" | "USD", value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -164,6 +173,72 @@ function loadRazorpayScript() {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getUserContext(): Promise<UserContext> {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data } = await supabase.auth.getSession();
+    const session = data.session;
+
+    return {
+      userId: session?.user?.id || null,
+      accessToken: session?.access_token || null,
+    };
+  } catch {
+    return {
+      userId: null,
+      accessToken: null,
+    };
+  }
+}
+
+function persistPendingOrder(orderId: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    CHECKOUT_ORDER_STORAGE_KEY,
+    JSON.stringify({ orderId, createdAt: Date.now() }),
+  );
+}
+
+function clearPendingOrder() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.removeItem(CHECKOUT_ORDER_STORAGE_KEY);
+}
+
+function readPendingOrderId() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(CHECKOUT_ORDER_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as { orderId?: string; createdAt?: number };
+    if (!parsed.orderId || !parsed.createdAt) {
+      clearPendingOrder();
+      return null;
+    }
+
+    const ageMs = Date.now() - parsed.createdAt;
+    if (ageMs > 1000 * 60 * 30) {
+      clearPendingOrder();
+      return null;
+    }
+
+    return parsed.orderId;
+  } catch {
+    clearPendingOrder();
+    return null;
+  }
 }
 
 export function PricingSection() {
@@ -212,6 +287,18 @@ export function PricingSection() {
     };
   }, []);
 
+  useEffect(() => {
+    const pendingOrderId = readPendingOrderId();
+    if (!pendingOrderId) {
+      return;
+    }
+
+    toast.info("Resuming your last payment check...");
+    void pollOrderStatus(pendingOrderId);
+    // We only want this to run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const backendPlanMap = useMemo(() => {
     const map = new Map<string, BackendPlan>();
     const plans = pricing?.pricing.plans || [];
@@ -222,6 +309,8 @@ export function PricingSection() {
   }, [pricing]);
 
   async function pollOrderStatus(orderId: string) {
+    const user = await getUserContext();
+
     setCheckoutState({
       open: true,
       title: "Confirming payment",
@@ -230,9 +319,26 @@ export function PricingSection() {
     });
 
     for (let attempt = 0; attempt < 20; attempt += 1) {
-      const response = await fetch(`/api/order-status?orderId=${encodeURIComponent(orderId)}`);
+      const response = await fetch(`/api/order-status?orderId=${encodeURIComponent(orderId)}`, {
+        headers: user.accessToken
+          ? {
+              Authorization: `Bearer ${user.accessToken}`,
+            }
+          : {},
+      });
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          clearPendingOrder();
+          setCheckoutState({
+            open: true,
+            title: "Sign in required",
+            message: "Please sign in to verify your order status.",
+            status: "failed",
+          });
+          toast.error("Please sign in to verify payment status.");
+          return;
+        }
         await sleep(2000);
         continue;
       }
@@ -240,22 +346,26 @@ export function PricingSection() {
       const data = (await response.json()) as OrderStatusResponse;
 
       if (data.status === "captured") {
+        clearPendingOrder();
         setCheckoutState({
           open: true,
           title: "Payment successful",
           message: "Your subscription is active. Continue to your dashboard.",
           status: "success",
         });
+        toast.success("Payment confirmed. Subscription activated.");
         return;
       }
 
       if (data.status === "failed") {
+        clearPendingOrder();
         setCheckoutState({
           open: true,
           title: "Payment failed",
           message: "Your payment did not go through. Please try again.",
           status: "failed",
         });
+        toast.error("Payment failed. Please try again.");
         return;
       }
 
@@ -268,6 +378,7 @@ export function PricingSection() {
       message: "Payment is being finalized. You can continue and refresh your dashboard in a moment.",
       status: "pending",
     });
+    toast.info("Payment is still being processed.");
   }
 
   async function handleCheckout(plan: DisplayPlan) {
@@ -277,6 +388,9 @@ export function PricingSection() {
 
     try {
       setCheckoutPlanId(plan.backendPlanId);
+      toast.info("Initializing secure checkout...");
+
+      const user = await getUserContext();
 
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded || !window.Razorpay) {
@@ -290,6 +404,7 @@ export function PricingSection() {
           planId: plan.backendPlanId,
           billingCycle,
           countryCode: pricing.countryCode,
+          userId: user.userId,
         }),
       });
 
@@ -299,6 +414,8 @@ export function PricingSection() {
       }
 
       const orderData = (await orderRes.json()) as OrderResponse;
+      persistPendingOrder(orderData.orderId);
+      toast.success("Checkout ready.");
 
       const razorpay = new window.Razorpay({
         key: orderData.razorpayKeyId,
@@ -309,6 +426,7 @@ export function PricingSection() {
         description: `${plan.name} (${billingCycle})`,
         theme: { color: "#8B5CF6" },
         handler: () => {
+          toast.success("Payment submitted. Verifying status...");
           void pollOrderStatus(orderData.orderId);
         },
         modal: {
@@ -319,18 +437,21 @@ export function PricingSection() {
               message: "You can resume checkout anytime from this pricing section.",
               status: "failed",
             });
+            toast.info("Checkout closed. You can retry anytime.");
           },
         },
       });
 
       razorpay.open();
     } catch (error) {
+      clearPendingOrder();
       setCheckoutState({
         open: true,
         title: "Checkout failed",
         message: error instanceof Error ? error.message : "Could not start checkout.",
         status: "failed",
       });
+      toast.error(error instanceof Error ? error.message : "Checkout failed");
     } finally {
       setCheckoutPlanId(null);
     }

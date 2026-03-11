@@ -1,5 +1,11 @@
 import { Outlet } from "react-router";
+import { Toaster } from "sonner";
 
 export function Root() {
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      <Toaster position="top-right" richColors closeButton />
+    </>
+  );
 }
