@@ -2,6 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, useInView } from "motion/react";
 import { useNavigate } from "react-router";
 import { Check, Sparkles, Zap, Building2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
+import { Button } from "../ui/button";
 
 type BillingCycle = "monthly" | "yearly";
 
@@ -32,6 +41,23 @@ type OrderResponse = {
   planId: string;
   billingCycle: BillingCycle;
   razorpayKeyId: string;
+};
+
+type OrderStatusResponse = {
+  ok: boolean;
+  orderId: string;
+  status: string;
+  subscriptionStatus: string | null;
+  updatedAt: string;
+  planId: string;
+  billingCycle: BillingCycle;
+};
+
+type CheckoutState = {
+  open: boolean;
+  title: string;
+  message: string;
+  status: "pending" | "success" | "failed";
 };
 
 type DisplayPlan = {
@@ -136,6 +162,10 @@ function loadRazorpayScript() {
   });
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function PricingSection() {
   const navigate = useNavigate();
   const ref = useRef<HTMLDivElement>(null);
@@ -144,6 +174,12 @@ export function PricingSection() {
   const [pricing, setPricing] = useState<PricingResponse | null>(null);
   const [loadingPricing, setLoadingPricing] = useState(true);
   const [checkoutPlanId, setCheckoutPlanId] = useState<string | null>(null);
+  const [checkoutState, setCheckoutState] = useState<CheckoutState>({
+    open: false,
+    title: "",
+    message: "",
+    status: "pending",
+  });
 
   const billingCycle: BillingCycle = yearly ? "yearly" : "monthly";
 
@@ -185,6 +221,55 @@ export function PricingSection() {
     return map;
   }, [pricing]);
 
+  async function pollOrderStatus(orderId: string) {
+    setCheckoutState({
+      open: true,
+      title: "Confirming payment",
+      message: "We are activating your plan. This usually takes a few seconds.",
+      status: "pending",
+    });
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const response = await fetch(`/api/order-status?orderId=${encodeURIComponent(orderId)}`);
+
+      if (!response.ok) {
+        await sleep(2000);
+        continue;
+      }
+
+      const data = (await response.json()) as OrderStatusResponse;
+
+      if (data.status === "captured") {
+        setCheckoutState({
+          open: true,
+          title: "Payment successful",
+          message: "Your subscription is active. Continue to your dashboard.",
+          status: "success",
+        });
+        return;
+      }
+
+      if (data.status === "failed") {
+        setCheckoutState({
+          open: true,
+          title: "Payment failed",
+          message: "Your payment did not go through. Please try again.",
+          status: "failed",
+        });
+        return;
+      }
+
+      await sleep(2000);
+    }
+
+    setCheckoutState({
+      open: true,
+      title: "Still processing",
+      message: "Payment is being finalized. You can continue and refresh your dashboard in a moment.",
+      status: "pending",
+    });
+  }
+
   async function handleCheckout(plan: DisplayPlan) {
     if (!pricing) {
       return;
@@ -224,13 +309,28 @@ export function PricingSection() {
         description: `${plan.name} (${billingCycle})`,
         theme: { color: "#8B5CF6" },
         handler: () => {
-          window.alert("Payment successful. Access will be activated shortly.");
+          void pollOrderStatus(orderData.orderId);
+        },
+        modal: {
+          ondismiss: () => {
+            setCheckoutState({
+              open: true,
+              title: "Checkout closed",
+              message: "You can resume checkout anytime from this pricing section.",
+              status: "failed",
+            });
+          },
         },
       });
 
       razorpay.open();
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Checkout failed");
+      setCheckoutState({
+        open: true,
+        title: "Checkout failed",
+        message: error instanceof Error ? error.message : "Could not start checkout.",
+        status: "failed",
+      });
     } finally {
       setCheckoutPlanId(null);
     }
@@ -447,6 +547,45 @@ export function PricingSection() {
           ))}
         </motion.div>
       </div>
+
+      <Dialog
+        open={checkoutState.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCheckoutState((prev) => ({ ...prev, open: false }));
+          }
+        }}
+      >
+        <DialogContent className="border-white/15 bg-[#0f0b22] text-white">
+          <DialogHeader>
+            <DialogTitle>{checkoutState.title}</DialogTitle>
+            <DialogDescription className="text-white/65">
+              {checkoutState.message}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            {checkoutState.status === "success" && (
+              <Button
+                onClick={() => {
+                  setCheckoutState((prev) => ({ ...prev, open: false }));
+                  navigate("/dashboard");
+                }}
+              >
+                Continue to Dashboard
+              </Button>
+            )}
+
+            {checkoutState.status !== "success" && (
+              <Button
+                variant="outline"
+                onClick={() => setCheckoutState((prev) => ({ ...prev, open: false }))}
+              >
+                Close
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
