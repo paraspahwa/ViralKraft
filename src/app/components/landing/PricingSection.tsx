@@ -1,76 +1,240 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, useInView } from "motion/react";
+import { useNavigate } from "react-router";
 import { Check, Sparkles, Zap, Building2 } from "lucide-react";
 
-const plans = [
+type BillingCycle = "monthly" | "yearly";
+
+type BackendPlan = {
+  planId: string;
+  name: string;
+  currency: "INR" | "USD";
+  monthly: number;
+  yearly: number;
+  features: string[];
+};
+
+type PricingResponse = {
+  ok: boolean;
+  countryCode: string;
+  pricing: {
+    currency: "INR" | "USD";
+    partner: string;
+    plans: BackendPlan[];
+  };
+};
+
+type OrderResponse = {
+  ok: boolean;
+  orderId: string;
+  amount: number;
+  currency: string;
+  planId: string;
+  billingCycle: BillingCycle;
+  razorpayKeyId: string;
+};
+
+type DisplayPlan = {
+  name: string;
+  backendPlanId: string;
+  icon: typeof Sparkles;
+  description: string;
+  color: string;
+  popular: boolean;
+  features: string[];
+  cta: string;
+};
+
+type RazorpayInstance = {
+  open: () => void;
+};
+
+type RazorpayConstructor = new (options: Record<string, unknown>) => RazorpayInstance;
+
+declare global {
+  interface Window {
+    Razorpay?: RazorpayConstructor;
+  }
+}
+
+const displayPlans: DisplayPlan[] = [
   {
     name: "Starter",
+    backendPlanId: "starter",
     icon: Sparkles,
-    price: { monthly: 0, yearly: 0 },
     description: "Perfect for creators just getting started",
     color: "#A78BFA",
     popular: false,
     features: [
-      "5 videos/month",
-      "720p export quality",
-      "10 AI voices",
+      "20 videos / month",
+      "Basic analytics",
+      "Email support",
       "Basic captions",
       "TikTok & Reels export",
-      "Watermarked output",
+      "Watermarked output"
     ],
-    notIncluded: ["RetentionAI™", "VoiceClone™", "Trend Scanner"],
-    cta: "Start Free Forever",
+    cta: "Start Starter"
   },
   {
-    name: "Creator",
+    name: "Growth",
+    backendPlanId: "growth",
     icon: Zap,
-    price: { monthly: 29, yearly: 19 },
     description: "For creators serious about going viral",
     color: "#A78BFA",
     popular: true,
     features: [
-      "Unlimited videos",
-      "4K export quality",
-      "200+ AI voices + emotions",
-      "RetentionAI™ optimization",
-      "Animated captions (20+ styles)",
-      "5 platform export",
-      "Character consistency",
-      "Trend Scanner access",
-      "No watermark",
-      "Priority rendering",
+      "100 videos / month",
+      "AI retention optimization",
+      "Priority support",
+      "Animated captions",
+      "5 platform export"
     ],
-    notIncluded: [],
-    cta: "Start 14-Day Free Trial",
+    cta: "Start Growth"
   },
   {
-    name: "Agency",
+    name: "Scale",
+    backendPlanId: "scale",
     icon: Building2,
-    price: { monthly: 99, yearly: 79 },
     description: "For teams, agencies & brands",
     color: "#06B6D4",
     popular: false,
     features: [
-      "Everything in Creator",
-      "10 team seats",
-      "VoiceClone™ — clone any voice",
+      "Unlimited videos",
+      "Team workspace",
+      "Dedicated success manager",
       "White-label branding",
-      "API access",
-      "Bulk video generation",
-      "Custom AI avatars",
-      "Dedicated account manager",
-      "SLA uptime guarantee",
-      "Early access to new features",
+      "API access"
     ],
-    notIncluded: [],
-    cta: "Start Agency Trial",
-  },
+    cta: "Start Scale"
+  }
 ];
 
+function formatCurrency(currency: "INR" | "USD", value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function loadRazorpayScript() {
+  if (typeof window === "undefined") {
+    return Promise.resolve(false);
+  }
+
+  if (window.Razorpay) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise<boolean>((resolve) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
 export function PricingSection() {
+  const navigate = useNavigate();
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });
   const [yearly, setYearly] = useState(false);
+  const [pricing, setPricing] = useState<PricingResponse | null>(null);
+  const [loadingPricing, setLoadingPricing] = useState(true);
+  const [checkoutPlanId, setCheckoutPlanId] = useState<string | null>(null);
+
+  const billingCycle: BillingCycle = yearly ? "yearly" : "monthly";
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchPricing() {
+      try {
+        setLoadingPricing(true);
+        const response = await fetch("/api/pricing");
+        const data = (await response.json()) as PricingResponse;
+
+        if (isMounted && response.ok) {
+          setPricing(data);
+        }
+      } catch {
+        if (isMounted) {
+          setPricing(null);
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingPricing(false);
+        }
+      }
+    }
+
+    fetchPricing();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const backendPlanMap = useMemo(() => {
+    const map = new Map<string, BackendPlan>();
+    const plans = pricing?.pricing.plans || [];
+    plans.forEach((plan) => {
+      map.set(plan.planId, plan);
+    });
+    return map;
+  }, [pricing]);
+
+  async function handleCheckout(plan: DisplayPlan) {
+    if (!pricing) {
+      return;
+    }
+
+    try {
+      setCheckoutPlanId(plan.backendPlanId);
+
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded || !window.Razorpay) {
+        throw new Error("Unable to load Razorpay checkout.");
+      }
+
+      const orderRes = await fetch("/api/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          planId: plan.backendPlanId,
+          billingCycle,
+          countryCode: pricing.countryCode,
+        }),
+      });
+
+      if (!orderRes.ok) {
+        const err = await orderRes.json();
+        throw new Error(err.error || "Could not create payment order.");
+      }
+
+      const orderData = (await orderRes.json()) as OrderResponse;
+
+      const razorpay = new window.Razorpay({
+        key: orderData.razorpayKeyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        order_id: orderData.orderId,
+        name: "ViralKraft",
+        description: `${plan.name} (${billingCycle})`,
+        theme: { color: "#8B5CF6" },
+        handler: () => {
+          window.alert("Payment successful. Access will be activated shortly.");
+        },
+      });
+
+      razorpay.open();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Checkout failed");
+    } finally {
+      setCheckoutPlanId(null);
+    }
+  }
 
   return (
     <section id="pricing" ref={ref} className="relative py-24 px-4">
@@ -140,8 +304,15 @@ export function PricingSection() {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {plans.map((plan, i) => {
+          {displayPlans.map((plan, i) => {
             const Icon = plan.icon;
+            const backendPlan = backendPlanMap.get(plan.backendPlanId);
+            const currency = pricing?.pricing.currency || "USD";
+            const monthly = backendPlan?.monthly;
+            const yearlyPrice = backendPlan?.yearly;
+            const currentPrice = billingCycle === "yearly" ? yearlyPrice : monthly;
+            const hasPrice = typeof currentPrice === "number";
+
             return (
               <motion.div
                 key={plan.name}
@@ -203,18 +374,15 @@ export function PricingSection() {
                         lineHeight: 1,
                       }}
                     >
-                      ${yearly ? plan.price.yearly : plan.price.monthly}
+                      {hasPrice ? formatCurrency(currency, currentPrice) : loadingPricing ? "..." : "N/A"}
                     </span>
-                    {plan.price.monthly > 0 && (
+                    {hasPrice && (
                       <span className="text-white/35 text-sm mb-1">/month</span>
                     )}
                   </div>
-                  {plan.price.monthly === 0 && (
-                    <p className="text-green-400 text-xs mt-1">Free forever</p>
-                  )}
-                  {yearly && plan.price.monthly > 0 && (
+                  {hasPrice && billingCycle === "yearly" && typeof monthly === "number" && typeof yearlyPrice === "number" && (
                     <p className="text-green-400 text-xs mt-1">
-                      Save ${(plan.price.monthly - plan.price.yearly) * 12}/year
+                      Save {formatCurrency(currency, (monthly - yearlyPrice) * 12)}/year
                     </p>
                   )}
                 </div>
@@ -233,6 +401,14 @@ export function PricingSection() {
                 <motion.button
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
+                  disabled={loadingPricing || !backendPlan || checkoutPlanId === plan.backendPlanId}
+                  onClick={() => {
+                    if (plan.backendPlanId === "starter") {
+                      navigate("/dashboard");
+                      return;
+                    }
+                    void handleCheckout(plan);
+                  }}
                   className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
                   style={
                     plan.popular
@@ -248,7 +424,7 @@ export function PricingSection() {
                         }
                   }
                 >
-                  {plan.cta}
+                  {checkoutPlanId === plan.backendPlanId ? "Opening Checkout..." : plan.cta}
                 </motion.button>
               </motion.div>
             );
