@@ -60,6 +60,22 @@ create table if not exists public.videos (
 create index if not exists videos_user_created_idx
   on public.videos (user_id, created_at desc);
 
+create table if not exists public.contact_inquiries (
+  id uuid primary key default gen_random_uuid(),
+  full_name text not null,
+  email text not null,
+  topic text not null,
+  message text not null,
+  source text,
+  metadata jsonb not null default '{}'::jsonb,
+  status text not null default 'new' check (status in ('new', 'reviewed', 'resolved', 'spam')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists contact_inquiries_status_created_idx
+  on public.contact_inquiries (status, created_at desc);
+
 alter table public.videos enable row level security;
 
 drop policy if exists "videos_select_own" on public.videos;

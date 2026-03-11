@@ -35,6 +35,41 @@ type PricingResponse = {
   };
 };
 
+const FALLBACK_PRICING: PricingResponse = {
+  ok: true,
+  countryCode: "US",
+  pricing: {
+    currency: "USD",
+    partner: "fallback",
+    plans: [
+      {
+        planId: "starter",
+        name: "Starter",
+        currency: "USD",
+        monthly: 29,
+        yearly: 290,
+        features: ["20 videos / month", "Basic analytics", "Email support"],
+      },
+      {
+        planId: "growth",
+        name: "Growth",
+        currency: "USD",
+        monthly: 79,
+        yearly: 790,
+        features: ["100 videos / month", "AI retention optimization", "Priority support"],
+      },
+      {
+        planId: "scale",
+        name: "Scale",
+        currency: "USD",
+        monthly: 199,
+        yearly: 1990,
+        features: ["Unlimited videos", "Team workspace", "Dedicated success manager"],
+      },
+    ],
+  },
+};
+
 type OrderResponse = {
   ok: boolean;
   orderId: string;
@@ -318,14 +353,19 @@ export function PricingSection() {
       try {
         setLoadingPricing(true);
         const response = await fetch("/api/pricing");
-        const data = (await response.json()) as PricingResponse;
+        if (!response.ok) {
+          throw new Error("pricing endpoint unavailable");
+        }
 
-        if (isMounted && response.ok) {
+        const data = (await response.json()) as PricingResponse;
+        if (isMounted) {
           setPricing(data);
         }
       } catch {
         if (isMounted) {
-          setPricing(null);
+          // Vite-only local dev does not serve serverless /api routes.
+          // Use a stable catalog fallback so pricing cards remain usable.
+          setPricing(FALLBACK_PRICING);
         }
       } finally {
         if (isMounted) {

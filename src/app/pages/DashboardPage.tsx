@@ -100,6 +100,7 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"all" | "published" | "rendering">("all");
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isAdminUser, setIsAdminUser] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [liveRecentVideos, setLiveRecentVideos] = useState<DashboardVideo[]>(recentVideos);
@@ -240,6 +241,48 @@ export function DashboardPage() {
     };
   }, [isAuthorized, userId]);
 
+  useEffect(() => {
+    if (!isAuthorized) {
+      setIsAdminUser(false);
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setIsAdminUser(false);
+      return;
+    }
+
+    let mounted = true;
+
+    const checkAdminAccess = async () => {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        if (mounted) {
+          setIsAdminUser(false);
+        }
+        return;
+      }
+
+      const response = await fetch("/api/contact-inquiries?limit=1", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (mounted) {
+        setIsAdminUser(response.ok);
+      }
+    };
+
+    void checkAdminAccess();
+
+    return () => {
+      mounted = false;
+    };
+  }, [isAuthorized]);
+
   async function runRealtimeDemo() {
     if (!import.meta.env.DEV) {
       return;
@@ -357,6 +400,14 @@ export function DashboardPage() {
               <button className="w-9 h-9 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-white/40 hover:text-white transition-colors">
                 <Settings className="w-4 h-4" />
               </button>
+              {isAdminUser && (
+                <button
+                  onClick={() => navigate("/dashboard/inquiries")}
+                  className="px-3.5 py-2.5 rounded-xl text-white/80 text-xs border border-white/15 bg-white/5 hover:text-white hover:border-white/25 transition-colors"
+                >
+                  Inquiries
+                </button>
+              )}
               <motion.button
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.97 }}

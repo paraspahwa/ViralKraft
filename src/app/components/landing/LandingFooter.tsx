@@ -1,13 +1,7 @@
 import { motion } from "motion/react";
 import { Sparkles, Twitter, Instagram, Youtube, Github, Mail, ArrowRight } from "lucide-react";
-import { useNavigate } from "react-router";
-
-const footerLinks = {
-  Product: ["Features", "RetentionAI™", "VoiceClone™", "Trend Scanner", "Pricing", "Changelog"],
-  Creators: ["Getting Started", "Video Templates", "Niche Guides", "Community", "Affiliate Program"],
-  Company: ["About Us", "Blog", "Careers", "Press Kit", "Contact"],
-  Legal: ["Privacy Policy", "Terms of Service", "Refund Policy", "Cookie Policy"],
-};
+import { Link, useNavigate } from "react-router";
+import { FOOTER_LINKS_BY_CATEGORY } from "../../lib/footerPages";
 
 export function LandingFooter() {
   const navigate = useNavigate();
@@ -130,7 +124,7 @@ export function LandingFooter() {
           </div>
 
           {/* Links */}
-          {Object.entries(footerLinks).map(([cat, links]) => (
+          {Object.entries(FOOTER_LINKS_BY_CATEGORY).map(([cat, links]) => (
             <div key={cat}>
               <h4
                 className="text-white/60 text-xs uppercase tracking-wider mb-4"
@@ -140,10 +134,10 @@ export function LandingFooter() {
               </h4>
               <ul className="flex flex-col gap-2.5">
                 {links.map((link) => (
-                  <li key={link}>
-                    <a href="#" className="text-white/30 hover:text-purple-300 text-xs transition-colors duration-200">
-                      {link}
-                    </a>
+                  <li key={link.path}>
+                    <Link to={link.path} className="text-white/30 hover:text-purple-300 text-xs transition-colors duration-200">
+                      {link.label}
+                    </Link>
                   </li>
                 ))}
               </ul>
