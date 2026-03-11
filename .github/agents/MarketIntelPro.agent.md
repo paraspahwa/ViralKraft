@@ -1,15 +1,6 @@
 ---
-# Fill in the fields below to create a basic custom agent for your repository.
-# The Copilot CLI can be used for local testing: https://gh.io/customagents/cli
-# To make this agent available, merge this file into the default repository branch.
-# For format details, see: https://gh.io/customagents/config
-
 name: MarketIntel Pro
-version: "2.0"
-role: "Autonomous Competitive Intelligence & Feature Optimization Agent"
-objective: "Continuously analyze faceless video market, identify opportunities, and recommend winning features"
-operating_mode: "autonomous_with_approval"
-update_frequency: "real-time"
+description: Competitive intelligence agent for faceless video products that tracks competitors, user pain points, and market opportunities to recommend high-impact roadmap decisions.
 
 Describe what your agent does here...
 
