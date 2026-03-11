@@ -4,6 +4,8 @@
 			"type": "stdio",
 			"command": "npx",
 			"args": [
+				"-y",
+				"@supabase/mcp-server-supabase@0.7.0",
 				"--project-ref",
 				"${input:project-ref}",
 				"--read-only",
@@ -11,10 +13,7 @@
 				"--features",
 				"${input:features}",
 				"--api-url",
-				"${input:api-url}",
-				"--registry",
-				"https://registry.npmjs.org",
-				"@supabase/mcp-server-supabase@0.7.0"
+				"${input:api-url}"
 			],
 			"env": {
 				"SUPABASE_ACCESS_TOKEN": "${input:SUPABASE_ACCESS_TOKEN}"
@@ -33,7 +32,7 @@
 		{
 			"id": "read-only",
 			"type": "promptString",
-			"description": "Enable read-only mode",
+			"description": "Enable read-only mode (true or false)",
 			"password": false
 		},
 		{
