@@ -7,13 +7,23 @@
 				"-y",
 				"@supabase/mcp-server-supabase@0.7.0",
 				"--project-ref",
+				"${input:project-ref}"
+			],
+			"env": {
+				"SUPABASE_ACCESS_TOKEN": "${input:SUPABASE_ACCESS_TOKEN}"
+			},
+			"gallery": "https://api.mcp.github.com",
+			"version": "0.7.0"
+		},
+		"com.supabase/mcp-readonly": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"-y",
+				"@supabase/mcp-server-supabase@0.7.0",
+				"--project-ref",
 				"${input:project-ref}",
-				"--read-only",
-				"${input:read-only}",
-				"--features",
-				"${input:features}",
-				"--api-url",
-				"${input:api-url}"
+				"--read-only"
 			],
 			"env": {
 				"SUPABASE_ACCESS_TOKEN": "${input:SUPABASE_ACCESS_TOKEN}"
@@ -27,24 +37,6 @@
 			"id": "project-ref",
 			"type": "promptString",
 			"description": "Supabase project reference ID",
-			"password": false
-		},
-		{
-			"id": "read-only",
-			"type": "promptString",
-			"description": "Enable read-only mode (true or false)",
-			"password": false
-		},
-		{
-			"id": "features",
-			"type": "promptString",
-			"description": "Comma-separated list of features to enable",
-			"password": false
-		},
-		{
-			"id": "api-url",
-			"type": "promptString",
-			"description": "Custom API URL",
 			"password": false
 		},
 		{
