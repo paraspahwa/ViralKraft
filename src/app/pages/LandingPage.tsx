@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { useLocation } from "react-router";
 import { CinematicBackground } from "../components/CinematicBackground";
 import { AppNavbar } from "../components/AppNavbar";
 import { LandingHero } from "../components/landing/LandingHero";
@@ -12,6 +14,33 @@ import { TestimonialsSection } from "../components/landing/TestimonialsSection";
 import { LandingFooter } from "../components/landing/LandingFooter";
 
 export function LandingPage() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const hash = location.hash;
+    if (!hash) {
+      return;
+    }
+
+    const id = hash.replace("#", "");
+    let attempts = 0;
+
+    const tryScroll = () => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+
+      attempts += 1;
+      if (attempts < 10) {
+        window.setTimeout(tryScroll, 50);
+      }
+    };
+
+    window.setTimeout(tryScroll, 0);
+  }, [location.hash]);
+
   return (
     <div
       className="relative min-h-screen overflow-x-hidden"
