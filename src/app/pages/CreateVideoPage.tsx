@@ -7,8 +7,24 @@ import { getSupabaseBrowserClient, hasSupabaseBrowserConfig } from "../lib/supab
 import {
   Sparkles, Brain, Mic2, Type, ChevronRight, ChevronLeft,
   Play, Wand2, Check, Loader2, TrendingUp, Flame,
-  Volume2, Smile, Zap, Download, Share2, RotateCcw
+  Volume2, Smile, Zap, Download, Share2, RotateCcw, RefreshCw
 } from "lucide-react";
+
+const fallbackScript = `🎯 HOOK (0-3s):
+"You're losing $10,000 a year and you don't even know it."
+
+📖 BODY (3-45s):
+Most people think they're saving money — but hidden fees are silently draining their accounts. Credit cards, subscriptions, banking apps... they all do it.
+
+Here's what to look for: [1] Annual fees disguised as 'maintenance'. [2] Foreign transaction fees on every purchase. [3] Inactivity fees — yes, for NOT spending.
+
+I audited my own finances last month and found $847 in hidden fees I didn't even know I was paying.
+
+🔁 RE-HOOK (45s):
+But here's the crazy part — you can get ALL of this money back. Here's exactly how...
+
+📢 CTA (55-60s):
+Follow for Part 2 where I show you the exact script to call your bank and get refunds instantly.`;
 
 const STEPS = [
   { id: 1, label: "Topic & Script", icon: Type },
@@ -17,12 +33,19 @@ const STEPS = [
   { id: 4, label: "Generate", icon: Sparkles },
 ];
 
-const trendTopics = [
-  "AI taking over creative jobs",
-  "Hidden fees in credit cards",
-  "Sleep hacks billionaires use",
-  "History's strangest coincidences",
-  "Passive income you can start today",
+type TrendTopic = {
+  id: string;
+  topic: string;
+  heat: number;
+  growth: string;
+};
+
+const fallbackTrendTopics: TrendTopic[] = [
+  { id: "t1", topic: "AI taking over creative jobs", heat: 96, growth: "+320%" },
+  { id: "t2", topic: "Hidden fees in credit cards", heat: 91, growth: "+210%" },
+  { id: "t3", topic: "Sleep hacks billionaires use", heat: 88, growth: "+175%" },
+  { id: "t4", topic: "History's strangest coincidences", heat: 85, growth: "+162%" },
+  { id: "t5", topic: "Passive income you can start today", heat: 82, growth: "+140%" },
 ];
 
 const voices = [
@@ -73,6 +96,10 @@ export function CreateVideoPage() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoReady, setVideoReady] = useState(false);
   const [retentionScore, setRetentionScore] = useState(0);
+  const [liveTrendTopics, setLiveTrendTopics] = useState<TrendTopic[]>(fallbackTrendTopics);
+  const [trendsUpdatedAt, setTrendsUpdatedAt] = useState(Date.now());
+  const [trendsUpdatedLabel, setTrendsUpdatedLabel] = useState("Updated just now");
+  const [trendsRefreshing, setTrendsRefreshing] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -119,6 +146,62 @@ export function CreateVideoPage() {
     };
   }, [navigate]);
 
+  async function refreshTrendingTopics() {
+    if (!isAuthorized) {
+      return;
+    }
+
+    try {
+      setTrendsRefreshing(true);
+      const supabase = getSupabaseBrowserClient();
+
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("trending_topics")
+          .select("id,topic,heat,growth")
+          .eq("is_active", true)
+          .order("heat", { ascending: false })
+          .limit(10);
+
+        if (!error && data && data.length > 0) {
+          setLiveTrendTopics(
+            data.map((row) => ({
+              id: String(row.id),
+              topic: String(row.topic),
+              heat: Number(row.heat) || 80,
+              growth: String(row.growth || "+100%"),
+            })),
+          );
+          setTrendsUpdatedAt(Date.now());
+          setTrendsUpdatedLabel("Updated just now");
+          return;
+        }
+      }
+
+      // Fallback: one-shot local refresh if DB table is unavailable.
+      setLiveTrendTopics((current) => {
+        const next = current.map((item) => {
+          const nextHeat = Math.max(65, Math.min(99, item.heat + (Math.random() > 0.5 ? 2 : -2)));
+          const growthBase = Number.parseInt(item.growth.replace(/[^0-9]/g, ""), 10) || 100;
+          const nextGrowth = Math.max(80, growthBase + (Math.random() > 0.5 ? 8 : -6));
+          return {
+            ...item,
+            heat: nextHeat,
+            growth: `+${nextGrowth}%`,
+          };
+        });
+
+        next.sort((a, b) => b.heat - a.heat);
+        return next;
+      });
+
+      setTrendsUpdatedAt(Date.now());
+      setTrendsUpdatedLabel("Updated just now");
+    } finally {
+      setTrendsRefreshing(false);
+    }
+  }
+
   if (isCheckingAuth || !isAuthorized) {
     return (
       <div className="relative min-h-screen" style={{ fontFamily: "Space Grotesk, Inter, sans-serif" }}>
@@ -133,12 +216,34 @@ export function CreateVideoPage() {
   const generateScript = async () => {
     if (!topic.trim()) return;
     setGenerating(true);
-    await new Promise((r) => setTimeout(r, 1800));
-    setScript(
-      `🎯 HOOK (0-3s):\n"You're losing $10,000 a year and you don't even know it."\n\n📖 BODY (3-45s):\nMost people think they're saving money — but hidden fees are silently draining their accounts. Credit cards, subscriptions, banking apps... they all do it.\n\nHere's what to look for: [1] Annual fees disguised as 'maintenance'. [2] Foreign transaction fees on every purchase. [3] Inactivity fees — yes, for NOT spending.\n\nI audited my own finances last month and found $847 in hidden fees I didn't even know I was paying.\n\n🔁 RE-HOOK (45s):\nBut here's the crazy part — you can get ALL of this money back. Here's exactly how...\n\n📢 CTA (55-60s):\nFollow for Part 2 where I show you the exact script to call your bank and get refunds instantly.`
-    );
-    setScriptGenerated(true);
-    setGenerating(false);
+
+    try {
+      const response = await fetch("/api/generate-script", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ topic: topic.trim() }),
+      });
+
+      if (!response.ok) {
+        throw new Error("AI script API failed");
+      }
+
+      const data = (await response.json()) as { ok?: boolean; script?: string };
+      if (!data.ok || !data.script) {
+        throw new Error("AI script response missing script");
+      }
+
+      setScript(data.script);
+      setScriptGenerated(true);
+    } catch {
+      // Keep UX unblocked when model/API is unavailable.
+      setScript(fallbackScript);
+      setScriptGenerated(true);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -252,13 +357,13 @@ export function CreateVideoPage() {
 
                     <div className="flex items-center gap-2 mt-3 flex-wrap">
                       <span className="text-white/25 text-xs">Try trending:</span>
-                      {trendTopics.slice(0, 3).map((t) => (
+                      {liveTrendTopics.slice(0, 3).map((t) => (
                         <button
-                          key={t}
-                          onClick={() => setTopic(t)}
+                          key={t.id}
+                          onClick={() => setTopic(t.topic)}
                           className="px-2 py-1 rounded-lg bg-white/5 border border-white/8 text-white/40 hover:text-white/70 text-xs transition-colors"
                         >
-                          {t}
+                          {t.topic}
                         </button>
                       ))}
                     </div>
@@ -313,26 +418,40 @@ export function CreateVideoPage() {
 
                 {/* Trending topics sidebar */}
                 <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Flame className="w-4 h-4 text-orange-400" />
-                    <h3 className="text-white text-sm font-semibold">Trending Topics</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Flame className="w-4 h-4 text-orange-400" />
+                      <h3 className="text-white text-sm font-semibold">Trending Topics</h3>
+                    </div>
+                    <button
+                      onClick={() => void refreshTrendingTopics()}
+                      disabled={trendsRefreshing}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[0.65rem] border border-white/12 text-white/70 hover:text-white disabled:opacity-60"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${trendsRefreshing ? "animate-spin" : ""}`} />
+                      Refresh
+                    </button>
                   </div>
-                  <p className="text-white/30 text-xs mb-4">Updated 2h ago • Click to use</p>
+                  <p className="text-white/30 text-xs mb-4">{trendsUpdatedLabel} • Click to use</p>
                   <div className="flex flex-col gap-2">
-                    {trendTopics.map((t, i) => (
+                    {liveTrendTopics.map((t, i) => (
                       <motion.button
-                        key={t}
+                        key={t.id}
                         whileHover={{ x: 3 }}
-                        onClick={() => setTopic(t)}
+                        onClick={() => setTopic(t.topic)}
                         className="flex items-start gap-2 p-3 rounded-xl text-left hover:bg-white/5 border border-transparent hover:border-white/8 transition-all"
                       >
                         <div
                           className="w-5 h-5 rounded-md flex items-center justify-center text-[0.6rem] font-bold flex-shrink-0 mt-0.5"
                           style={{ background: "rgba(245,158,11,0.15)", color: "#FCD34D" }}
                         >
-                          {i + 1}
+                          {t.heat}
                         </div>
-                        <span className="text-white/55 text-xs leading-snug hover:text-white">{t}</span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-white/55 text-xs leading-snug hover:text-white block">{t.topic}</span>
+                          <span className="text-green-400 text-[0.65rem]">{t.growth}</span>
+                        </div>
+                        <span className="text-white/20 text-[0.6rem]">#{i + 1}</span>
                       </motion.button>
                     ))}
                   </div>

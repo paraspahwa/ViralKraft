@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate, useLocation } from "react-router";
 import { Sparkles, Menu, X, Zap, ChevronDown } from "lucide-react";
+import { toast } from "sonner";
+import { getSupabaseBrowserClient } from "../lib/supabaseClient";
 
 const navLinks = [
   { label: "Features", href: "#features" },
@@ -23,6 +25,24 @@ export function AppNavbar() {
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  async function handleSignOut() {
+    const supabase = getSupabaseBrowserClient();
+
+    if (!supabase) {
+      navigate("/", { replace: true });
+      return;
+    }
+
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      toast.error(error.message || "Failed to sign out");
+      return;
+    }
+
+    toast.success("Signed out successfully");
+    navigate("/", { replace: true });
+  }
 
   return (
     <motion.nav
@@ -104,16 +124,26 @@ export function AppNavbar() {
           {/* CTA */}
           <div className="hidden md:flex items-center gap-3">
             {isDashboard ? (
-              <motion.button
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => navigate("/create")}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium"
-                style={{ background: "linear-gradient(135deg, #8B5CF6, #06B6D4)", boxShadow: "0 4px 24px rgba(139,92,246,0.35)" }}
-              >
-                <Zap className="w-3.5 h-3.5" />
-                New Video
-              </motion.button>
+              <>
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => void handleSignOut()}
+                  className="px-4 py-2 text-sm text-white/70 hover:text-white border border-white/10 hover:border-white/25 rounded-xl transition-all"
+                >
+                  Sign Out
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => navigate("/create")}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium"
+                  style={{ background: "linear-gradient(135deg, #8B5CF6, #06B6D4)", boxShadow: "0 4px 24px rgba(139,92,246,0.35)" }}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  New Video
+                </motion.button>
+              </>
             ) : (
               <>
                 <motion.button
@@ -172,21 +202,45 @@ export function AppNavbar() {
                   )}
                 </a>
               ))}
-              <div className="flex flex-col gap-2 pt-3 border-t border-white/8">
-                <button
-                  onClick={() => { navigate("/login?next=/dashboard"); setMenuOpen(false); }}
-                  className="w-full py-2.5 text-sm text-white/70 border border-white/10 rounded-xl"
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => { navigate("/login?next=/dashboard"); setMenuOpen(false); }}
-                  className="w-full py-2.5 text-sm text-white rounded-xl"
-                  style={{ background: "linear-gradient(135deg, #8B5CF6, #06B6D4)" }}
-                >
-                  Start Free — No Credit Card
-                </button>
-              </div>
+              {isDashboard ? (
+                <div className="flex flex-col gap-2 pt-3 border-t border-white/8">
+                  <button
+                    onClick={() => { navigate("/dashboard"); setMenuOpen(false); }}
+                    className="w-full py-2.5 text-sm text-white/70 border border-white/10 rounded-xl"
+                  >
+                    Dashboard
+                  </button>
+                  <button
+                    onClick={() => { navigate("/create"); setMenuOpen(false); }}
+                    className="w-full py-2.5 text-sm text-white rounded-xl"
+                    style={{ background: "linear-gradient(135deg, #8B5CF6, #06B6D4)" }}
+                  >
+                    New Video
+                  </button>
+                  <button
+                    onClick={() => { void handleSignOut(); setMenuOpen(false); }}
+                    className="w-full py-2.5 text-sm text-white/70 border border-white/10 rounded-xl"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 pt-3 border-t border-white/8">
+                  <button
+                    onClick={() => { navigate("/login?next=/dashboard"); setMenuOpen(false); }}
+                    className="w-full py-2.5 text-sm text-white/70 border border-white/10 rounded-xl"
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={() => { navigate("/login?next=/dashboard"); setMenuOpen(false); }}
+                    className="w-full py-2.5 text-sm text-white rounded-xl"
+                    style={{ background: "linear-gradient(135deg, #8B5CF6, #06B6D4)" }}
+                  >
+                    Start Free — No Credit Card
+                  </button>
+                </div>
+              )}
             </div>
           </motion.div>
         )}

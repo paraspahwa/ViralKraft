@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
+import { toast } from "sonner";
 import { CinematicBackground } from "../components/CinematicBackground";
 import { AppNavbar } from "../components/AppNavbar";
 import { getSupabaseBrowserClient, hasSupabaseBrowserConfig } from "../lib/supabaseClient";
@@ -33,11 +34,76 @@ const statCards = [
   { label: "Retention Score", value: "A+", change: "Top 3%", icon: Brain, color: "#34D399" },
 ];
 
+function formatCompactViews(value: number) {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  }
+
+  if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(1)}K`;
+  }
+
+  return String(value);
+}
+
+type DashboardVideo = {
+  id: string | number;
+  title: string;
+  niche: string;
+  status: "published" | "rendering";
+  views: string;
+  watchTime: string;
+  platform: string;
+  thumb: string;
+  createdAt: string;
+};
+
+type VideoRow = {
+  id: string;
+  title: string;
+  niche: string;
+  status: "published" | "rendering";
+  views_count: number | null;
+  watch_time_pct: number | null;
+  platform: string | null;
+  thumb_color: string | null;
+  created_at: string;
+  user_id: string;
+};
+
+function toRelativeTime(timestamp: string) {
+  const ms = Date.now() - new Date(timestamp).getTime();
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function mapVideoRow(row: VideoRow): DashboardVideo {
+  return {
+    id: row.id,
+    title: row.title,
+    niche: row.niche,
+    status: row.status,
+    views: row.views_count === null ? "—" : formatCompactViews(row.views_count),
+    watchTime: row.watch_time_pct === null ? "—" : `${row.watch_time_pct}%`,
+    platform: row.platform || "TikTok",
+    thumb: row.thumb_color || "#A78BFA",
+    createdAt: toRelativeTime(row.created_at),
+  };
+}
+
 export function DashboardPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"all" | "published" | "rendering">("all");
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [liveRecentVideos, setLiveRecentVideos] = useState<DashboardVideo[]>(recentVideos);
+  const [debugSyncing, setDebugSyncing] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -70,6 +136,7 @@ export function DashboardPage() {
       }
 
       setIsAuthorized(authed);
+      setUserId(data.session?.user?.id || null);
       setIsCheckingAuth(false);
 
       if (!authed) {
@@ -84,6 +151,149 @@ export function DashboardPage() {
     };
   }, [navigate]);
 
+  useEffect(() => {
+    if (!isAuthorized || !userId) {
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      return;
+    }
+
+    let mounted = true;
+
+    const loadInitial = async () => {
+      const { data, error } = await supabase
+        .from("videos")
+        .select("id,title,niche,status,views_count,watch_time_pct,platform,thumb_color,created_at,user_id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (!mounted || error || !data) {
+        return;
+      }
+
+      if (data.length > 0) {
+        setLiveRecentVideos(data.map((row) => mapVideoRow(row as VideoRow)));
+      }
+    };
+
+    void loadInitial();
+
+    const channel = supabase
+      .channel(`dashboard-videos-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "videos",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const eventType = payload.eventType;
+          if (eventType === "DELETE") {
+            const oldRow = payload.old as { id?: string };
+            if (!oldRow?.id) {
+              return;
+            }
+            setLiveRecentVideos((current) => current.filter((video) => String(video.id) !== String(oldRow.id)));
+            return;
+          }
+
+          const nextRow = (payload.new || null) as VideoRow | null;
+          if (!nextRow?.id) {
+            return;
+          }
+
+          const mapped = mapVideoRow(nextRow);
+          setLiveRecentVideos((current) => {
+            const withoutCurrent = current.filter((video) => String(video.id) !== String(mapped.id));
+            return [mapped, ...withoutCurrent].slice(0, 20);
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [isAuthorized, userId]);
+
+  async function runRealtimeDemo() {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
+    if (!userId) {
+      toast.error("You must be signed in to run realtime demo.");
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      toast.error("Supabase client not available.");
+      return;
+    }
+
+    try {
+      setDebugSyncing(true);
+
+      const now = Date.now();
+      const title = `Realtime Demo ${new Date(now).toLocaleTimeString()}`;
+      const nicheOptions = ["Tech", "Finance", "Education", "History"];
+      const platformOptions = ["TikTok", "Reels", "Shorts"];
+      const colorOptions = ["#A78BFA", "#06B6D4", "#EC4899", "#34D399", "#F59E0B"];
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("videos")
+        .insert({
+          user_id: userId,
+          title,
+          niche: nicheOptions[Math.floor(Math.random() * nicheOptions.length)],
+          status: "rendering",
+          platform: platformOptions[Math.floor(Math.random() * platformOptions.length)],
+          views_count: 0,
+          watch_time_pct: null,
+          thumb_color: colorOptions[Math.floor(Math.random() * colorOptions.length)],
+          metadata: { source: "dashboard-dev-realtime-demo" },
+        })
+        .select("id")
+        .single();
+
+      if (insertError || !inserted?.id) {
+        throw new Error(insertError?.message || "Failed to insert demo video");
+      }
+
+      // Small delay to visibly demonstrate a second realtime update.
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+
+      const { error: updateError } = await supabase
+        .from("videos")
+        .update({
+          status: "published",
+          views_count: 1250 + Math.floor(Math.random() * 900),
+          watch_time_pct: 62 + Math.floor(Math.random() * 20),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", inserted.id)
+        .eq("user_id", userId);
+
+      if (updateError) {
+        throw new Error(updateError.message || "Failed to update demo video");
+      }
+
+      toast.success("Realtime demo event sent.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Realtime demo failed");
+    } finally {
+      setDebugSyncing(false);
+    }
+  }
+
   if (isCheckingAuth || !isAuthorized) {
     return (
       <div className="relative min-h-screen" style={{ fontFamily: "Space Grotesk, Inter, sans-serif" }}>
@@ -95,7 +305,7 @@ export function DashboardPage() {
     );
   }
 
-  const filtered = recentVideos.filter(
+  const filtered = liveRecentVideos.filter(
     (v) => activeTab === "all" || v.status === activeTab
   );
 
@@ -195,7 +405,18 @@ export function DashboardPage() {
                   >
                     Recent Videos
                   </h2>
-                  <div className="flex gap-1">
+                  <div className="flex items-center gap-2">
+                    {import.meta.env.DEV && (
+                      <button
+                        onClick={() => void runRealtimeDemo()}
+                        disabled={debugSyncing}
+                        className="px-2.5 py-1 rounded-lg text-[0.65rem] border border-cyan-500/30 bg-cyan-500/10 text-cyan-200 disabled:opacity-60"
+                      >
+                        {debugSyncing ? "Syncing..." : "Realtime Demo"}
+                      </button>
+                    )}
+
+                    <div className="flex gap-1">
                     {(["all", "published", "rendering"] as const).map((tab) => (
                       <button
                         key={tab}
@@ -209,6 +430,7 @@ export function DashboardPage() {
                         {tab}
                       </button>
                     ))}
+                    </div>
                   </div>
                 </div>
 

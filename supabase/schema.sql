@@ -42,6 +42,58 @@ create table if not exists public.subscriptions (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.videos (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  title text not null,
+  niche text not null,
+  status text not null check (status in ('published', 'rendering')),
+  platform text,
+  views_count integer,
+  watch_time_pct integer,
+  thumb_color text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists videos_user_created_idx
+  on public.videos (user_id, created_at desc);
+
+alter table public.videos enable row level security;
+
+drop policy if exists "videos_select_own" on public.videos;
+create policy "videos_select_own"
+  on public.videos
+  for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "videos_insert_own" on public.videos;
+create policy "videos_insert_own"
+  on public.videos
+  for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "videos_update_own" on public.videos;
+create policy "videos_update_own"
+  on public.videos
+  for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "videos_delete_own" on public.videos;
+create policy "videos_delete_own"
+  on public.videos
+  for delete
+  using (auth.uid() = user_id);
+
+do $$
+begin
+  alter publication supabase_realtime add table public.videos;
+exception
+  when duplicate_object then null;
+end $$;
+
 insert into public.plans (plan_id, name, description, monthly_inr, yearly_inr, monthly_usd, yearly_usd, features)
 values
   ('starter', 'Starter', 'Creators starting their short-form engine', 1499, 14990, 29, 290, '["20 videos / month", "Basic analytics", "Email support"]'::jsonb),

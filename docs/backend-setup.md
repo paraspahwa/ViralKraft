@@ -11,6 +11,7 @@
 - `GET /api/health` - service health and public payment key check.
 - `GET /api/geo-ip` - resolves caller geo from forwarded IP.
 - `GET /api/pricing` - returns plan catalog based on geo or `?country=IN`.
+- `POST /api/generate-script` - generates 60s short-form script using GPT-4o mini.
 - `POST /api/create-order` - creates Razorpay order and stores pending order in Supabase.
 - `POST /api/razorpay-webhook` - verifies signature and updates order/subscription state.
 
@@ -34,6 +35,8 @@
 - Backend env (required for API routes):
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
+   - `OPENAI_API_KEY`
+   - `OPENAI_MODEL` (default: `gpt-4o-mini`)
    - `RAZORPAY_KEY_ID`
    - `RAZORPAY_KEY_SECRET`
    - `RAZORPAY_WEBHOOK_SECRET`
