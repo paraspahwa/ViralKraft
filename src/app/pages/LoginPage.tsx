@@ -116,6 +116,7 @@ export function LoginPage() {
       setLoading(true);
       const redirectTo = `${window.location.origin}${nextPath}`;
       let error: Error | null = null;
+      let signedInSessionUserId: string | null = null;
 
       if (mode === "magic") {
         const result = await supabase.auth.signInWithOtp({
@@ -133,6 +134,7 @@ export function LoginPage() {
           password,
         });
         error = result.error;
+        signedInSessionUserId = result.data.session?.user?.id || null;
       }
 
       if (mode === "signup") {
@@ -157,6 +159,9 @@ export function LoginPage() {
         toast.success("Account created. Check your email if verification is enabled.");
       } else {
         toast.success("Signed in successfully.");
+        if (signedInSessionUserId) {
+          navigate(nextPath, { replace: true });
+        }
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Authentication failed");

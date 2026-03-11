@@ -101,6 +101,23 @@ export function CreateVideoPage() {
   const [trendsUpdatedLabel, setTrendsUpdatedLabel] = useState("Updated just now");
   const [trendsRefreshing, setTrendsRefreshing] = useState(false);
 
+  async function getSessionWithRetry() {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      return null;
+    }
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user?.id) {
+        return data.session;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+    }
+
+    return null;
+  }
+
   useEffect(() => {
     let mounted = true;
 
@@ -124,8 +141,8 @@ export function CreateVideoPage() {
         return;
       }
 
-      const { data } = await supabase.auth.getSession();
-      const authed = Boolean(data.session?.user?.id);
+      const session = await getSessionWithRetry();
+      const authed = Boolean(session?.user?.id);
 
       if (!mounted) {
         return;

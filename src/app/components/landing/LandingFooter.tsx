@@ -63,7 +63,7 @@ export function LandingFooter() {
               <motion.button
                 whileHover={{ scale: 1.04, boxShadow: "0 0 40px rgba(139,92,246,0.5)" }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => navigate("/login?next=/dashboard")}
+                onClick={() => navigate("/startfree")}
                 className="flex items-center justify-center gap-2 px-7 py-3 rounded-xl text-white text-sm font-semibold"
                 style={{
                   background: "linear-gradient(135deg, #8B5CF6, #06B6D4)",

@@ -105,6 +105,23 @@ export function DashboardPage() {
   const [liveRecentVideos, setLiveRecentVideos] = useState<DashboardVideo[]>(recentVideos);
   const [debugSyncing, setDebugSyncing] = useState(false);
 
+  async function getSessionWithRetry() {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      return null;
+    }
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user?.id) {
+        return data.session;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+    }
+
+    return null;
+  }
+
   useEffect(() => {
     let mounted = true;
 
@@ -128,15 +145,15 @@ export function DashboardPage() {
         return;
       }
 
-      const { data } = await supabase.auth.getSession();
-      const authed = Boolean(data.session?.user?.id);
+      const session = await getSessionWithRetry();
+      const authed = Boolean(session?.user?.id);
 
       if (!mounted) {
         return;
       }
 
       setIsAuthorized(authed);
-      setUserId(data.session?.user?.id || null);
+      setUserId(session?.user?.id || null);
       setIsCheckingAuth(false);
 
       if (!authed) {
