@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router";
+import { toast } from "sonner";
 import { CinematicBackground } from "../components/CinematicBackground";
 import { AppNavbar } from "../components/AppNavbar";
 import { getSupabaseBrowserClient, hasSupabaseBrowserConfig } from "../lib/supabaseClient";
 import {
   Sparkles, Brain, Mic2, Type, ChevronRight, ChevronLeft,
   Play, Wand2, Check, Loader2, TrendingUp, Flame,
-  Volume2, Smile, Zap, Download, Share2, RotateCcw, RefreshCw
+  Volume2, Smile, Zap, Download, Share2, RotateCcw, RefreshCw,
+  Scissors, SlidersHorizontal, Upload, Music, Save
 } from "lucide-react";
 
 const fallbackScript = `🎯 HOOK (0-3s):
@@ -96,6 +98,24 @@ export function CreateVideoPage() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoReady, setVideoReady] = useState(false);
   const [retentionScore, setRetentionScore] = useState(0);
+  const [savedVideoId, setSavedVideoId] = useState<string | null>(null);
+  const [isSavingEdits, setIsSavingEdits] = useState(false);
+  const [hasLoadedDraft, setHasLoadedDraft] = useState(false);
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimEnd, setTrimEnd] = useState(60);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [captionScale, setCaptionScale] = useState(100);
+  const [bhashiniVoiceLanguage, setBhashiniVoiceLanguage] = useState("hi-IN");
+  const [bhashiniAudioUrl, setBhashiniAudioUrl] = useState<string | null>(null);
+  const [isSynthesizingVoice, setIsSynthesizingVoice] = useState(false);
+  const [uploadedVoiceFileName, setUploadedVoiceFileName] = useState<string | null>(null);
+  const [uploadedVoiceUrl, setUploadedVoiceUrl] = useState<string | null>(null);
+  const [uploadedVoicePath, setUploadedVoicePath] = useState<string | null>(null);
+  const [uploadedVoiceFile, setUploadedVoiceFile] = useState<File | null>(null);
+  const [uploadedSongFileName, setUploadedSongFileName] = useState<string | null>(null);
+  const [uploadedSongUrl, setUploadedSongUrl] = useState<string | null>(null);
+  const [uploadedSongPath, setUploadedSongPath] = useState<string | null>(null);
+  const [uploadedSongFile, setUploadedSongFile] = useState<File | null>(null);
   const [liveTrendTopics, setLiveTrendTopics] = useState<TrendTopic[]>(fallbackTrendTopics);
   const [trendsUpdatedAt, setTrendsUpdatedAt] = useState(Date.now());
   const [trendsUpdatedLabel, setTrendsUpdatedLabel] = useState("Updated just now");
@@ -162,6 +182,162 @@ export function CreateVideoPage() {
       mounted = false;
     };
   }, [navigate]);
+
+  useEffect(() => {
+    if (!isAuthorized || hasLoadedDraft) {
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setHasLoadedDraft(true);
+      return;
+    }
+
+    let mounted = true;
+
+    const loadLatestDraft = async () => {
+      const createSignedAudioUrl = async (filePath: string) => {
+        const { data: signedData, error: signedError } = await supabase.storage
+          .from("user-audio")
+          .createSignedUrl(filePath, 60 * 60);
+
+        if (signedError || !signedData?.signedUrl) {
+          return null;
+        }
+
+        return signedData.signedUrl;
+      };
+
+      const { data, error } = await supabase
+        .from("videos")
+        .select("id,title,niche,status,metadata,created_at")
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (!mounted) {
+        return;
+      }
+
+      setHasLoadedDraft(true);
+
+      if (error || !data || data.length === 0) {
+        return;
+      }
+
+      const draft = data.find((row) => {
+        const metadata = (row as { metadata?: { source?: string } }).metadata;
+        return metadata?.source === "create-video-editor";
+      }) as
+        | {
+            id: string;
+            title: string;
+            metadata?: {
+              script?: string;
+              editSettings?: {
+                trimStart?: number;
+                trimEnd?: number;
+                playbackRate?: number;
+                captionScale?: number;
+                selectedCaption?: string;
+                selectedBg?: string;
+              };
+              audio?: {
+                aiVoice?: {
+                  language?: string;
+                  selectedVoice?: string;
+                  emotion?: string;
+                  trackUrl?: string | null;
+                };
+                uploadedVoice?: {
+                  fileName?: string | null;
+                  trackPath?: string | null;
+                  trackUrl?: string | null;
+                };
+                uploadedSong?: {
+                  fileName?: string | null;
+                  trackPath?: string | null;
+                  trackUrl?: string | null;
+                };
+              };
+            };
+          }
+        | undefined;
+
+      if (!draft) {
+        return;
+      }
+
+      setSavedVideoId(draft.id);
+      setTopic(draft.title || "");
+      setScript(draft.metadata?.script || "");
+      setScriptGenerated(Boolean(draft.metadata?.script));
+      setStep(4);
+      setVideoReady(true);
+
+      const editSettings = draft.metadata?.editSettings;
+      if (typeof editSettings?.trimStart === "number") setTrimStart(editSettings.trimStart);
+      if (typeof editSettings?.trimEnd === "number") setTrimEnd(editSettings.trimEnd);
+      if (typeof editSettings?.playbackRate === "number") setPlaybackRate(editSettings.playbackRate);
+      if (typeof editSettings?.captionScale === "number") setCaptionScale(editSettings.captionScale);
+      if (typeof editSettings?.selectedCaption === "string") setSelectedCaption(editSettings.selectedCaption);
+      if (typeof editSettings?.selectedBg === "string") setSelectedBg(editSettings.selectedBg);
+
+      const aiVoice = draft.metadata?.audio?.aiVoice;
+      if (typeof aiVoice?.language === "string") setBhashiniVoiceLanguage(aiVoice.language);
+      if (typeof aiVoice?.selectedVoice === "string") setSelectedVoice(aiVoice.selectedVoice);
+      if (typeof aiVoice?.emotion === "string") setSelectedEmotion(aiVoice.emotion);
+      if (typeof aiVoice?.trackUrl === "string" && aiVoice.trackUrl.trim()) {
+        setBhashiniAudioUrl(aiVoice.trackUrl);
+      }
+
+      const uploadedVoice = draft.metadata?.audio?.uploadedVoice;
+      const uploadedSong = draft.metadata?.audio?.uploadedSong;
+      if (typeof uploadedVoice?.fileName === "string" && uploadedVoice.fileName.trim()) {
+        setUploadedVoiceFileName(uploadedVoice.fileName);
+      }
+      if (typeof uploadedVoice?.trackPath === "string" && uploadedVoice.trackPath.trim()) {
+        setUploadedVoicePath(uploadedVoice.trackPath);
+        const signedUrl = await createSignedAudioUrl(uploadedVoice.trackPath);
+        if (signedUrl) {
+          setUploadedVoiceUrl(signedUrl);
+        }
+      } else if (typeof uploadedVoice?.trackUrl === "string" && uploadedVoice.trackUrl.trim()) {
+        setUploadedVoiceUrl(uploadedVoice.trackUrl);
+      }
+      if (typeof uploadedSong?.fileName === "string" && uploadedSong.fileName.trim()) {
+        setUploadedSongFileName(uploadedSong.fileName);
+      }
+      if (typeof uploadedSong?.trackPath === "string" && uploadedSong.trackPath.trim()) {
+        setUploadedSongPath(uploadedSong.trackPath);
+        const signedUrl = await createSignedAudioUrl(uploadedSong.trackPath);
+        if (signedUrl) {
+          setUploadedSongUrl(signedUrl);
+        }
+      } else if (typeof uploadedSong?.trackUrl === "string" && uploadedSong.trackUrl.trim()) {
+        setUploadedSongUrl(uploadedSong.trackUrl);
+      }
+
+      toast.success("Loaded your latest saved draft.");
+    };
+
+    void loadLatestDraft();
+
+    return () => {
+      mounted = false;
+    };
+  }, [hasLoadedDraft, isAuthorized]);
+
+  useEffect(() => {
+    return () => {
+      if (uploadedVoiceUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(uploadedVoiceUrl);
+      }
+      if (uploadedSongUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(uploadedSongUrl);
+      }
+    };
+  }, [uploadedSongUrl, uploadedVoiceUrl]);
 
   async function refreshTrendingTopics() {
     if (!isAuthorized) {
@@ -282,6 +458,227 @@ export function CreateVideoPage() {
     setRetentionScore(Math.floor(Math.random() * 8) + 82); // 82-89
     setVideoGenerating(false);
     setVideoReady(true);
+    setSavedVideoId(null);
+    setTrimStart(0);
+    setTrimEnd(60);
+    setPlaybackRate(1);
+    setCaptionScale(100);
+  };
+
+  const saveEditSettings = async () => {
+    try {
+      if (trimStart >= trimEnd) {
+        toast.error("Trim start must be less than trim end.");
+        return;
+      }
+
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        toast.error("Supabase client not available.");
+        return;
+      }
+
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      const userId = data.session?.user?.id;
+
+      if (!token || !userId) {
+        toast.error("Please sign in again to save edits.");
+        return;
+      }
+
+      setIsSavingEdits(true);
+
+      let persistedVoiceUrl = uploadedVoiceUrl;
+      let persistedSongUrl = uploadedSongUrl;
+      let persistedVoicePath = uploadedVoicePath;
+      let persistedSongPath = uploadedSongPath;
+
+      const uploadFileIfNeeded = async (kind: "voice" | "song", file: File | null) => {
+        if (!file) {
+          return null;
+        }
+
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const filePath = `${userId}/${kind}/${Date.now()}-${safeName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("user-audio")
+          .upload(filePath, file, { upsert: false });
+
+        if (uploadError) {
+          throw new Error(uploadError.message || `Failed to upload ${kind} file`);
+        }
+
+        const { data: signedData, error: signedError } = await supabase.storage
+          .from("user-audio")
+          .createSignedUrl(filePath, 60 * 60);
+
+        if (signedError || !signedData?.signedUrl) {
+          throw new Error(signedError?.message || `Failed to create signed URL for ${kind}`);
+        }
+
+        return { filePath, signedUrl: signedData.signedUrl };
+      };
+
+      if (uploadedVoiceFile) {
+        const uploaded = await uploadFileIfNeeded("voice", uploadedVoiceFile);
+        persistedVoicePath = uploaded?.filePath || null;
+        persistedVoiceUrl = uploaded?.signedUrl || null;
+      }
+
+      if (uploadedSongFile) {
+        const uploaded = await uploadFileIfNeeded("song", uploadedSongFile);
+        persistedSongPath = uploaded?.filePath || null;
+        persistedSongUrl = uploaded?.signedUrl || null;
+      }
+
+      if (!uploadedVoiceFile && uploadedVoicePath) {
+        const { data: signedVoiceData } = await supabase.storage
+          .from("user-audio")
+          .createSignedUrl(uploadedVoicePath, 60 * 60);
+        persistedVoiceUrl = signedVoiceData?.signedUrl || persistedVoiceUrl;
+      }
+
+      if (!uploadedSongFile && uploadedSongPath) {
+        const { data: signedSongData } = await supabase.storage
+          .from("user-audio")
+          .createSignedUrl(uploadedSongPath, 60 * 60);
+        persistedSongUrl = signedSongData?.signedUrl || persistedSongUrl;
+      }
+
+      const response = await fetch("/api/save-video-edit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          videoId: savedVideoId,
+          title: topic?.trim() || "Generated Video",
+          niche: liveTrendTopics.find((item) => item.topic === topic)?.topic ? "Trending" : "General",
+          script,
+          status: "rendering",
+          editSettings: {
+            trimStart,
+            trimEnd,
+            playbackRate,
+            captionScale,
+            selectedCaption,
+            selectedBg,
+          },
+          audio: {
+            aiVoice: {
+              provider: bhashiniAudioUrl ? "bhashini" : "native",
+              language: bhashiniVoiceLanguage,
+              selectedVoice,
+              emotion: selectedEmotion,
+              hasGeneratedTrack: Boolean(bhashiniAudioUrl),
+              trackUrl: bhashiniAudioUrl && bhashiniAudioUrl.startsWith("http") ? bhashiniAudioUrl : null,
+            },
+            uploadedVoice: {
+              fileName: uploadedVoiceFileName,
+              attached: Boolean(uploadedVoiceFileName),
+              trackPath: persistedVoicePath || null,
+              trackUrl: persistedVoiceUrl || null,
+            },
+            uploadedSong: {
+              fileName: uploadedSongFileName,
+              attached: Boolean(uploadedSongFileName),
+              trackPath: persistedSongPath || null,
+              trackUrl: persistedSongUrl || null,
+            },
+          },
+        }),
+      });
+
+      const payload = (await response.json()) as { ok?: boolean; error?: string; videoId?: string };
+      if (!response.ok || !payload.ok || !payload.videoId) {
+        throw new Error(payload.error || "Could not save edit settings");
+      }
+
+      setSavedVideoId(payload.videoId);
+      setUploadedVoicePath(persistedVoicePath || null);
+      setUploadedSongPath(persistedSongPath || null);
+      setUploadedVoiceUrl(persistedVoiceUrl || null);
+      setUploadedSongUrl(persistedSongUrl || null);
+      setUploadedVoiceFile(null);
+      setUploadedSongFile(null);
+      toast.success("Edit settings saved.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Save failed");
+    } finally {
+      setIsSavingEdits(false);
+    }
+  };
+
+  const handleVoiceUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (uploadedVoiceUrl) {
+      URL.revokeObjectURL(uploadedVoiceUrl);
+    }
+
+    const localUrl = URL.createObjectURL(file);
+    setUploadedVoiceFileName(file.name);
+    setUploadedVoiceFile(file);
+    setUploadedVoicePath(null);
+    setUploadedVoiceUrl(localUrl);
+  };
+
+  const handleSongUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (uploadedSongUrl) {
+      URL.revokeObjectURL(uploadedSongUrl);
+    }
+
+    const localUrl = URL.createObjectURL(file);
+    setUploadedSongFileName(file.name);
+    setUploadedSongFile(file);
+    setUploadedSongPath(null);
+    setUploadedSongUrl(localUrl);
+  };
+
+  const synthesizeBhashiniVoice = async () => {
+    if (!script.trim()) {
+      toast.error("Generate or enter a script first.");
+      return;
+    }
+
+    try {
+      setIsSynthesizingVoice(true);
+      const response = await fetch("/api/bhashini-voice", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: script,
+          language: bhashiniVoiceLanguage,
+          voiceId: selectedVoice,
+          emotion: selectedEmotion,
+        }),
+      });
+
+      const payload = (await response.json()) as { ok?: boolean; audioUrl?: string; error?: string };
+      if (!response.ok || !payload.ok || !payload.audioUrl) {
+        throw new Error(payload.error || "Could not synthesize voice");
+      }
+
+      setBhashiniAudioUrl(payload.audioUrl);
+      toast.success("Bhashini AI voice generated.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Voice generation failed");
+    } finally {
+      setIsSynthesizingVoice(false);
+    }
   };
 
   const progressLabels: { [key: number]: string } = {
@@ -571,6 +968,62 @@ export function CreateVideoPage() {
                     ))}
                   </div>
                 </div>
+
+                <section className="rounded-2xl border border-white/8 bg-white/3 p-5">
+                  <div className="mb-4 flex items-center gap-2">
+                    <SlidersHorizontal className="h-4 w-4 text-purple-300" />
+                    <h4 className="text-sm font-semibold text-white">Voice and Audio Tracks</h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-white/8 bg-white/3 p-3">
+                      <p className="mb-2 text-xs font-semibold text-white">Bhashini AI Voice</p>
+                      <select
+                        value={bhashiniVoiceLanguage}
+                        onChange={(event) => setBhashiniVoiceLanguage(event.target.value)}
+                        className="mb-2 w-full rounded-md border border-white/10 bg-black/20 px-2 py-1 text-xs text-white"
+                      >
+                        <option value="hi-IN">Hindi (hi-IN)</option>
+                        <option value="en-IN">English India (en-IN)</option>
+                        <option value="bn-IN">Bengali (bn-IN)</option>
+                        <option value="ta-IN">Tamil (ta-IN)</option>
+                      </select>
+                      <button
+                        onClick={() => void synthesizeBhashiniVoice()}
+                        disabled={isSynthesizingVoice}
+                        className="inline-flex items-center gap-2 rounded-lg border border-purple-400/30 bg-purple-500/12 px-3 py-1.5 text-xs text-purple-200 disabled:opacity-60"
+                      >
+                        {isSynthesizingVoice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Volume2 className="h-3.5 w-3.5" />}
+                        {isSynthesizingVoice ? "Synthesizing..." : "Generate Bhashini Voice"}
+                      </button>
+                      {bhashiniAudioUrl && (
+                        <audio controls className="mt-3 w-full" src={bhashiniAudioUrl} />
+                      )}
+                    </div>
+
+                    <div className="rounded-xl border border-white/8 bg-white/3 p-3">
+                      <p className="mb-2 text-xs font-semibold text-white">Upload Your Voice</p>
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/12 bg-black/20 px-3 py-1.5 text-xs text-white/70 hover:text-white">
+                        <Upload className="h-3.5 w-3.5" />
+                        Select Voice File
+                        <input type="file" accept="audio/*" className="hidden" onChange={handleVoiceUpload} />
+                      </label>
+                      {uploadedVoiceFileName && <p className="mt-2 text-[0.7rem] text-white/55">{uploadedVoiceFileName}</p>}
+                      {uploadedVoiceUrl && <audio controls className="mt-3 w-full" src={uploadedVoiceUrl} />}
+                    </div>
+
+                    <div className="rounded-xl border border-white/8 bg-white/3 p-3 sm:col-span-2">
+                      <p className="mb-2 text-xs font-semibold text-white">Upload Background Song / Music</p>
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/12 bg-black/20 px-3 py-1.5 text-xs text-white/70 hover:text-white">
+                        <Music className="h-3.5 w-3.5" />
+                        Select Music Track
+                        <input type="file" accept="audio/*" className="hidden" onChange={handleSongUpload} />
+                      </label>
+                      {uploadedSongFileName && <p className="mt-2 text-[0.7rem] text-white/55">{uploadedSongFileName}</p>}
+                      {uploadedSongUrl && <audio controls className="mt-3 w-full" src={uploadedSongUrl} />}
+                    </div>
+                  </div>
+                </section>
 
                 <div className="flex justify-between">
                   <button
@@ -862,6 +1315,73 @@ export function CreateVideoPage() {
                         New Video
                       </motion.button>
                     </div>
+
+                    <section className="rounded-2xl border border-white/8 bg-white/3 p-5">
+                      <div className="mb-4 flex items-center gap-2">
+                        <Scissors className="h-4 w-4 text-cyan-300" />
+                        <h4 className="text-sm font-semibold text-white">Post-Generation Editor</h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <label className="rounded-xl border border-white/8 bg-white/3 p-3">
+                          <p className="mb-1 text-[0.65rem] uppercase tracking-wide text-white/45">Trim Start (sec)</p>
+                          <input
+                            type="number"
+                            min={0}
+                            max={59}
+                            value={trimStart}
+                            onChange={(event) => setTrimStart(Number(event.target.value) || 0)}
+                            className="w-full rounded-md border border-white/10 bg-black/20 px-2 py-1 text-xs text-white outline-none"
+                          />
+                        </label>
+                        <label className="rounded-xl border border-white/8 bg-white/3 p-3">
+                          <p className="mb-1 text-[0.65rem] uppercase tracking-wide text-white/45">Trim End (sec)</p>
+                          <input
+                            type="number"
+                            min={1}
+                            max={60}
+                            value={trimEnd}
+                            onChange={(event) => setTrimEnd(Number(event.target.value) || 60)}
+                            className="w-full rounded-md border border-white/10 bg-black/20 px-2 py-1 text-xs text-white outline-none"
+                          />
+                        </label>
+                        <label className="rounded-xl border border-white/8 bg-white/3 p-3">
+                          <p className="mb-1 text-[0.65rem] uppercase tracking-wide text-white/45">Playback Rate</p>
+                          <input
+                            type="range"
+                            min={0.8}
+                            max={1.4}
+                            step={0.05}
+                            value={playbackRate}
+                            onChange={(event) => setPlaybackRate(Number(event.target.value))}
+                            className="w-full"
+                          />
+                          <p className="text-[0.7rem] text-white/60">{playbackRate.toFixed(2)}x</p>
+                        </label>
+                        <label className="rounded-xl border border-white/8 bg-white/3 p-3">
+                          <p className="mb-1 text-[0.65rem] uppercase tracking-wide text-white/45">Caption Size</p>
+                          <input
+                            type="range"
+                            min={80}
+                            max={140}
+                            step={5}
+                            value={captionScale}
+                            onChange={(event) => setCaptionScale(Number(event.target.value))}
+                            className="w-full"
+                          />
+                          <p className="text-[0.7rem] text-white/60">{captionScale}%</p>
+                        </label>
+                      </div>
+
+                      <button
+                        onClick={() => void saveEditSettings()}
+                        disabled={isSavingEdits}
+                        className="mt-4 inline-flex items-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-200 disabled:opacity-60"
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                        {isSavingEdits ? "Saving..." : "Save Edit Settings"}
+                      </button>
+                    </section>
 
                     <motion.button
                       whileHover={{ scale: 1.02 }}

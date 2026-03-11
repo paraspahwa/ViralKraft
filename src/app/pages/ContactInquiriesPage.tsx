@@ -55,6 +55,17 @@ export function ContactInquiriesPage() {
         },
       });
 
+      if (response.status === 401) {
+        navigate("/login?next=/dashboard/inquiries", { replace: true });
+        return;
+      }
+
+      if (response.status === 403) {
+        toast.error("Admin access required.");
+        navigate("/dashboard", { replace: true });
+        return;
+      }
+
       const payload = (await response.json()) as { ok?: boolean; error?: string; inquiries?: InquiryRow[] };
       if (!response.ok || !payload.ok) {
         throw new Error(payload.error || "Could not load inquiries");
@@ -100,7 +111,11 @@ export function ContactInquiriesPage() {
     try {
       setUpdatingId(id);
       const supabase = getSupabaseBrowserClient();
-      const { data } = await supabase!.auth.getSession();
+      if (!supabase) {
+        throw new Error("Supabase client not available");
+      }
+
+      const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
       if (!token) {
         throw new Error("Please sign in again");

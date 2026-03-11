@@ -110,6 +110,54 @@ exception
   when duplicate_object then null;
 end $$;
 
+insert into storage.buckets (id, name, public)
+values ('user-audio', 'user-audio', false)
+on conflict (id) do nothing;
+
+drop policy if exists "user_audio_select_own" on storage.objects;
+create policy "user_audio_select_own"
+  on storage.objects
+  for select
+  to authenticated
+  using (
+    bucket_id = 'user-audio'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "user_audio_insert_own" on storage.objects;
+create policy "user_audio_insert_own"
+  on storage.objects
+  for insert
+  to authenticated
+  with check (
+    bucket_id = 'user-audio'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "user_audio_update_own" on storage.objects;
+create policy "user_audio_update_own"
+  on storage.objects
+  for update
+  to authenticated
+  using (
+    bucket_id = 'user-audio'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  )
+  with check (
+    bucket_id = 'user-audio'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "user_audio_delete_own" on storage.objects;
+create policy "user_audio_delete_own"
+  on storage.objects
+  for delete
+  to authenticated
+  using (
+    bucket_id = 'user-audio'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
 insert into public.plans (plan_id, name, description, monthly_inr, yearly_inr, monthly_usd, yearly_usd, features)
 values
   ('starter', 'Starter', 'Creators starting their short-form engine', 1499, 14990, 29, 290, '["20 videos / month", "Basic analytics", "Email support"]'::jsonb),
