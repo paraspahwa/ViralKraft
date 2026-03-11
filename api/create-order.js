@@ -37,6 +37,12 @@ export default async function handler(req, res) {
       countryCode: detectedCountry,
     });
 
+    // Paid orders must always be tied to a user to keep order status checks user-scoped.
+    if (selection.amountMajor > 0 && !userId) {
+      sendJson(res, 401, { error: "Authentication required to create a paid order" });
+      return;
+    }
+
     const razorpay = getRazorpayClient();
     const receipt = makeReceipt();
     const notes = {

@@ -2,6 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 
 let browserClient: ReturnType<typeof createClient> | null = null;
 
+export function hasSupabaseBrowserConfig() {
+  return Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+}
+
 export function getSupabaseBrowserClient() {
   if (browserClient) {
     return browserClient;
@@ -11,7 +15,7 @@ export function getSupabaseBrowserClient() {
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   if (!url || !anonKey) {
-    throw new Error("Supabase browser credentials are not configured");
+    return null;
   }
 
   browserClient = createClient(url, anonKey);

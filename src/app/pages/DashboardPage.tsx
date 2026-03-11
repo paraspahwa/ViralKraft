@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
 import { CinematicBackground } from "../components/CinematicBackground";
 import { AppNavbar } from "../components/AppNavbar";
+import { getSupabaseBrowserClient, hasSupabaseBrowserConfig } from "../lib/supabaseClient";
 import {
   Sparkles, TrendingUp, Play, Eye, Clock, MoreHorizontal,
   Zap, Brain, Plus, BarChart3, Video, Star, Flame,
@@ -35,6 +36,64 @@ const statCards = [
 export function DashboardPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"all" | "published" | "rendering">("all");
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function checkAuth() {
+      if (!hasSupabaseBrowserConfig()) {
+        if (mounted) {
+          setIsAuthorized(false);
+          setIsCheckingAuth(false);
+        }
+        navigate("/", { replace: true });
+        return;
+      }
+
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        if (mounted) {
+          setIsAuthorized(false);
+          setIsCheckingAuth(false);
+        }
+        navigate("/", { replace: true });
+        return;
+      }
+
+      const { data } = await supabase.auth.getSession();
+      const authed = Boolean(data.session?.user?.id);
+
+      if (!mounted) {
+        return;
+      }
+
+      setIsAuthorized(authed);
+      setIsCheckingAuth(false);
+
+      if (!authed) {
+        navigate("/", { replace: true });
+      }
+    }
+
+    void checkAuth();
+
+    return () => {
+      mounted = false;
+    };
+  }, [navigate]);
+
+  if (isCheckingAuth || !isAuthorized) {
+    return (
+      <div className="relative min-h-screen" style={{ fontFamily: "Space Grotesk, Inter, sans-serif" }}>
+        <CinematicBackground />
+        <div className="relative" style={{ zIndex: 1 }}>
+          <AppNavbar />
+        </div>
+      </div>
+    );
+  }
 
   const filtered = recentVideos.filter(
     (v) => activeTab === "all" || v.status === activeTab

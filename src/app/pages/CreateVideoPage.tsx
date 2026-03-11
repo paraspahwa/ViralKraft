@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router";
 import { CinematicBackground } from "../components/CinematicBackground";
 import { AppNavbar } from "../components/AppNavbar";
+import { getSupabaseBrowserClient, hasSupabaseBrowserConfig } from "../lib/supabaseClient";
 import {
   Sparkles, Brain, Mic2, Type, ChevronRight, ChevronLeft,
   Play, Wand2, Check, Loader2, TrendingUp, Flame,
@@ -57,6 +58,8 @@ const backgrounds = [
 
 export function CreateVideoPage() {
   const navigate = useNavigate();
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [step, setStep] = useState(1);
   const [topic, setTopic] = useState("");
   const [script, setScript] = useState("");
@@ -70,6 +73,62 @@ export function CreateVideoPage() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoReady, setVideoReady] = useState(false);
   const [retentionScore, setRetentionScore] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function checkAuth() {
+      if (!hasSupabaseBrowserConfig()) {
+        if (mounted) {
+          setIsAuthorized(false);
+          setIsCheckingAuth(false);
+        }
+        navigate("/", { replace: true });
+        return;
+      }
+
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        if (mounted) {
+          setIsAuthorized(false);
+          setIsCheckingAuth(false);
+        }
+        navigate("/", { replace: true });
+        return;
+      }
+
+      const { data } = await supabase.auth.getSession();
+      const authed = Boolean(data.session?.user?.id);
+
+      if (!mounted) {
+        return;
+      }
+
+      setIsAuthorized(authed);
+      setIsCheckingAuth(false);
+
+      if (!authed) {
+        navigate("/", { replace: true });
+      }
+    }
+
+    void checkAuth();
+
+    return () => {
+      mounted = false;
+    };
+  }, [navigate]);
+
+  if (isCheckingAuth || !isAuthorized) {
+    return (
+      <div className="relative min-h-screen" style={{ fontFamily: "Space Grotesk, Inter, sans-serif" }}>
+        <CinematicBackground />
+        <div className="relative" style={{ zIndex: 1 }}>
+          <AppNavbar />
+        </div>
+      </div>
+    );
+  }
 
   const generateScript = async () => {
     if (!topic.trim()) return;

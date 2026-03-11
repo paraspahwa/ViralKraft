@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Button } from "../ui/button";
-import { getSupabaseBrowserClient } from "../../lib/supabaseClient";
+import { getSupabaseBrowserClient, hasSupabaseBrowserConfig } from "../../lib/supabaseClient";
 
 type BillingCycle = "monthly" | "yearly";
 
@@ -60,6 +60,7 @@ type CheckoutState = {
   title: string;
   message: string;
   status: "pending" | "success" | "failed";
+  action: "close" | "signin" | "dashboard";
 };
 
 type UserContext = {
@@ -178,6 +179,13 @@ function sleep(ms: number) {
 async function getUserContext(): Promise<UserContext> {
   try {
     const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      return {
+        userId: null,
+        accessToken: null,
+      };
+    }
+
     const { data } = await supabase.auth.getSession();
     const session = data.session;
 
@@ -249,14 +257,59 @@ export function PricingSection() {
   const [pricing, setPricing] = useState<PricingResponse | null>(null);
   const [loadingPricing, setLoadingPricing] = useState(true);
   const [checkoutPlanId, setCheckoutPlanId] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [isSignedIn, setIsSignedIn] = useState(false);
   const [checkoutState, setCheckoutState] = useState<CheckoutState>({
     open: false,
     title: "",
     message: "",
     status: "pending",
+    action: "close",
   });
 
   const billingCycle: BillingCycle = yearly ? "yearly" : "monthly";
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (!hasSupabaseBrowserConfig()) {
+      setAuthReady(true);
+      setIsSignedIn(false);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    async function loadAuthState() {
+      const user = await getUserContext();
+      if (mounted) {
+        setIsSignedIn(Boolean(user.userId));
+        setAuthReady(true);
+      }
+    }
+
+    loadAuthState();
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setAuthReady(true);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsSignedIn(Boolean(session?.user?.id));
+      setAuthReady(true);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -316,6 +369,7 @@ export function PricingSection() {
       title: "Confirming payment",
       message: "We are activating your plan. This usually takes a few seconds.",
       status: "pending",
+      action: "close",
     });
 
     for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -335,6 +389,7 @@ export function PricingSection() {
             title: "Sign in required",
             message: "Please sign in to verify your order status.",
             status: "failed",
+            action: "signin",
           });
           toast.error("Please sign in to verify payment status.");
           return;
@@ -352,6 +407,7 @@ export function PricingSection() {
           title: "Payment successful",
           message: "Your subscription is active. Continue to your dashboard.",
           status: "success",
+          action: "dashboard",
         });
         toast.success("Payment confirmed. Subscription activated.");
         return;
@@ -364,6 +420,7 @@ export function PricingSection() {
           title: "Payment failed",
           message: "Your payment did not go through. Please try again.",
           status: "failed",
+          action: "close",
         });
         toast.error("Payment failed. Please try again.");
         return;
@@ -377,6 +434,7 @@ export function PricingSection() {
       title: "Still processing",
       message: "Payment is being finalized. You can continue and refresh your dashboard in a moment.",
       status: "pending",
+      action: "dashboard",
     });
     toast.info("Payment is still being processed.");
   }
@@ -391,6 +449,20 @@ export function PricingSection() {
       toast.info("Initializing secure checkout...");
 
       const user = await getUserContext();
+      const planPricing = backendPlanMap.get(plan.backendPlanId);
+      const selectedAmount = billingCycle === "yearly" ? planPricing?.yearly : planPricing?.monthly;
+
+      if (typeof selectedAmount === "number" && selectedAmount > 0 && !user.userId) {
+        setCheckoutState({
+          open: true,
+          title: "Sign in required",
+          message: "Please sign in before purchasing a paid plan.",
+          status: "failed",
+          action: "signin",
+        });
+        toast.error("Please sign in to continue with paid checkout.");
+        return;
+      }
 
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded || !window.Razorpay) {
@@ -436,6 +508,7 @@ export function PricingSection() {
               title: "Checkout closed",
               message: "You can resume checkout anytime from this pricing section.",
               status: "failed",
+              action: "close",
             });
             toast.info("Checkout closed. You can retry anytime.");
           },
@@ -450,6 +523,7 @@ export function PricingSection() {
         title: "Checkout failed",
         message: error instanceof Error ? error.message : "Could not start checkout.",
         status: "failed",
+        action: "close",
       });
       toast.error(error instanceof Error ? error.message : "Checkout failed");
     } finally {
@@ -533,6 +607,8 @@ export function PricingSection() {
             const yearlyPrice = backendPlan?.yearly;
             const currentPrice = billingCycle === "yearly" ? yearlyPrice : monthly;
             const hasPrice = typeof currentPrice === "number";
+            const isPaidPlan = Boolean((monthly ?? 0) > 0 || (yearlyPrice ?? 0) > 0);
+            const signInRequiredForCheckout = authReady && !isSignedIn && isPaidPlan && plan.backendPlanId !== "starter";
 
             return (
               <motion.div
@@ -645,8 +721,18 @@ export function PricingSection() {
                         }
                   }
                 >
-                  {checkoutPlanId === plan.backendPlanId ? "Opening Checkout..." : plan.cta}
+                  {checkoutPlanId === plan.backendPlanId
+                    ? "Opening Checkout..."
+                    : signInRequiredForCheckout
+                      ? "Sign in to Buy"
+                      : plan.cta}
                 </motion.button>
+
+                {signInRequiredForCheckout && (
+                  <p className="mt-2 text-[0.68rem] text-amber-300/90 text-center">
+                    Sign in required for paid checkout
+                  </p>
+                )}
               </motion.div>
             );
           })}
@@ -688,7 +774,7 @@ export function PricingSection() {
             {checkoutState.status === "success" && (
               <Button
                 onClick={() => {
-                  setCheckoutState((prev) => ({ ...prev, open: false }));
+                  setCheckoutState((prev) => ({ ...prev, open: false, action: "close" }));
                   navigate("/dashboard");
                 }}
               >
@@ -696,10 +782,32 @@ export function PricingSection() {
               </Button>
             )}
 
-            {checkoutState.status !== "success" && (
+            {checkoutState.action === "signin" && (
+              <Button
+                onClick={() => {
+                  setCheckoutState((prev) => ({ ...prev, open: false, action: "close" }));
+                  navigate("/dashboard");
+                }}
+              >
+                Sign in to Continue
+              </Button>
+            )}
+
+            {checkoutState.action === "dashboard" && checkoutState.status !== "success" && (
+              <Button
+                onClick={() => {
+                  setCheckoutState((prev) => ({ ...prev, open: false, action: "close" }));
+                  navigate("/dashboard");
+                }}
+              >
+                Go to Dashboard
+              </Button>
+            )}
+
+            {checkoutState.action === "close" && (
               <Button
                 variant="outline"
-                onClick={() => setCheckoutState((prev) => ({ ...prev, open: false }))}
+                onClick={() => setCheckoutState((prev) => ({ ...prev, open: false, action: "close" }))}
               >
                 Close
               </Button>
