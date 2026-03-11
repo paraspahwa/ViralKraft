@@ -701,6 +701,10 @@ export function PricingSection() {
                   disabled={loadingPricing || !backendPlan || checkoutPlanId === plan.backendPlanId}
                   onClick={() => {
                     if (plan.backendPlanId === "starter") {
+                      if (authReady && !isSignedIn) {
+                        navigate("/login?next=/dashboard");
+                        return;
+                      }
                       navigate("/dashboard");
                       return;
                     }
@@ -786,7 +790,7 @@ export function PricingSection() {
               <Button
                 onClick={() => {
                   setCheckoutState((prev) => ({ ...prev, open: false, action: "close" }));
-                  navigate("/dashboard");
+                  navigate("/login?next=/dashboard");
                 }}
               >
                 Sign in to Continue

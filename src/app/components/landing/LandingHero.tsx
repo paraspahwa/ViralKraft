@@ -126,7 +126,7 @@ export function LandingHero() {
               <motion.button
                 whileHover={{ scale: 1.04, boxShadow: "0 0 50px rgba(139,92,246,0.5)" }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => navigate("/dashboard")}
+                onClick={() => navigate("/login?next=/dashboard")}
                 className="flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl text-white text-sm font-semibold"
                 style={{
                   background: "linear-gradient(135deg, #8B5CF6 0%, #06B6D4 100%)",

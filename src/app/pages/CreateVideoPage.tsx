@@ -83,7 +83,7 @@ export function CreateVideoPage() {
           setIsAuthorized(false);
           setIsCheckingAuth(false);
         }
-        navigate("/", { replace: true });
+        navigate("/login?next=/create", { replace: true });
         return;
       }
 
@@ -93,7 +93,7 @@ export function CreateVideoPage() {
           setIsAuthorized(false);
           setIsCheckingAuth(false);
         }
-        navigate("/", { replace: true });
+        navigate("/login?next=/create", { replace: true });
         return;
       }
 
@@ -108,7 +108,7 @@ export function CreateVideoPage() {
       setIsCheckingAuth(false);
 
       if (!authed) {
-        navigate("/", { replace: true });
+        navigate("/login?next=/create", { replace: true });
       }
     }
 

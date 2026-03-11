@@ -48,7 +48,7 @@ export function DashboardPage() {
           setIsAuthorized(false);
           setIsCheckingAuth(false);
         }
-        navigate("/", { replace: true });
+        navigate("/login?next=/dashboard", { replace: true });
         return;
       }
 
@@ -58,7 +58,7 @@ export function DashboardPage() {
           setIsAuthorized(false);
           setIsCheckingAuth(false);
         }
-        navigate("/", { replace: true });
+        navigate("/login?next=/dashboard", { replace: true });
         return;
       }
 
@@ -73,7 +73,7 @@ export function DashboardPage() {
       setIsCheckingAuth(false);
 
       if (!authed) {
-        navigate("/", { replace: true });
+        navigate("/login?next=/dashboard", { replace: true });
       }
     }
 
