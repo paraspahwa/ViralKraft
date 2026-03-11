@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "dev:vercel": "vercel dev --listen 3000"
+    "dev:vercel": "vercel dev --listen 3000",
+    "check:auth-payment": "node scripts/verify-auth-payment.mjs",
+    "ci": "npm run check:auth-payment && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.57.4",
