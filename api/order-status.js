@@ -36,7 +36,7 @@ export default async function handler(req, res) {
 
     const { data: orderRow, error: orderError } = await supabase
       .from("payment_orders")
-      .select("id, status, user_id, plan_id, billing_cycle, updated_at")
+      .select("id, status, user_id, plan_id, billing_cycle, metadata, updated_at")
       .eq("razorpay_order_id", orderId)
       .single();
 
@@ -83,6 +83,7 @@ export default async function handler(req, res) {
       updatedAt: orderRow.updated_at,
       planId: orderRow.plan_id,
       billingCycle: orderRow.billing_cycle,
+      purchaseType: orderRow?.metadata?.purchaseType || "subscription",
     });
   } catch (error) {
     sendJson(res, 500, {

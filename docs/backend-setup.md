@@ -5,12 +5,12 @@
 - Backend: Vercel serverless functions in `/api`.
 - Database: Supabase Postgres.
 - Payments: Razorpay order + webhook flow.
-- Geo pricing: IP-based region detection with INR for India, USD for rest-of-world.
+- Credit pricing: API serves subscription tiers and pay-per-use credit packs with `1 credit = $0.0999`; checkout is charged in localized currency.
 
 ## API Endpoints
 - `GET /api/health` - service health and public payment key check.
 - `GET /api/geo-ip` - resolves caller geo from forwarded IP.
-- `GET /api/pricing` - returns plan catalog based on geo or `?country=IN`.
+- `GET /api/pricing` - returns subscription tiers plus credit-pack catalog.
 - `POST /api/generate-script` - generates 60s short-form script using GPT-4o mini.
 - `POST /api/create-order` - creates Razorpay order and stores pending order in Supabase.
 - `POST /api/razorpay-webhook` - verifies signature and updates order/subscription state.
@@ -79,16 +79,16 @@ curl -sS "$BASE_URL/api/health"
 # Expected: {"ok":true,...}
 # Check: service="viralkraft-backend" and HTTP 200
 
-# Geo-aware pricing (auto country)
+# Credit-based pricing catalog
 curl -sS "$BASE_URL/api/pricing"
 
-# Expected: {"ok":true,"pricing":{"currency":"INR|USD","plans":[...]}}
-# Check: 3 plans returned (starter, growth, scale)
+# Expected: {"ok":true,"pricing":{"unit":"credits","usdPerCredit":0.0999,"subscriptionTiers":[...],"creditPacks":[...]}}
+# Check: 5 subscription tiers (free_trial, starter, creator, pro, studio) and 4 credit packs
 
-# Pricing (forced country override)
+# Pricing (country override accepted for checkout context)
 curl -sS "$BASE_URL/api/pricing?country=IN"
 
-# Expected: currency="INR"
+# Expected: same credit catalog payload
 
 # Order status (replace with real Razorpay order id)
 curl -sS "$BASE_URL/api/order-status?orderId=order_xxxxx"
@@ -119,7 +119,7 @@ curl -sS \
 | `/api/order-status` returns 403 | Token belongs to different user than order owner | Use the same user account that created the order |
 | `/api/order-status` keeps `created` | Webhook not firing or signature mismatch | Verify webhook URL, subscribed events, and `RAZORPAY_WEBHOOK_SECRET` |
 | Payment succeeded in Razorpay but subscription not active | Webhook delivery failed or database write error | Check Vercel logs for `/api/razorpay-webhook` and validate Supabase service key |
-| Pricing currency looks wrong | Geo lookup fallback or forced query param | Verify `country` query override and test from expected IP/location |
+| Pricing catalog looks wrong | Deployment mismatch or stale cache | Verify `/api/pricing` returns tiers and packs with `usdPerCredit:0.0999` |
 
 ## Launch-Day Go-Live Checklist
 - Final environment verification:
@@ -144,9 +144,15 @@ curl -sS \
    - Team has access to Vercel + Supabase + Razorpay dashboards.
 
 ## Pricing Strategy
-- India: INR localized pricing via Razorpay partner stack.
-- Global: USD pricing.
-- Plans: Starter, Growth, Scale with monthly and yearly options.
+- Conversion rate: `1 credit = $0.0999`.
+- Subscription tiers:
+   - Free Trial: 3 videos, 480p, Free
+   - Starter: 20/month, 480p, $4.99
+   - Creator: 50/month, 720p, $14.99
+   - Pro: 100/month, 720p HQ, $29.99
+   - Studio: Unlimited, 1080p, $99.99
+- Pay-per-use packs: 100/$9.99, 250/$19.99, 500/$34.99, 1000/$59.99
+- Checkout remains region-localized (INR/USD) via Razorpay.
 - Revenue optimization:
   - Push yearly plan discount by default in checkout UI.
   - Use geo-aware anchor pricing to reduce friction.

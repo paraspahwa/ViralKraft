@@ -31,7 +31,7 @@ Follow for Part 2 where I show you the exact script to call your bank and get re
 const STEPS = [
   { id: 1, label: "Topic & Script", icon: Type },
   { id: 2, label: "Voice & Avatar", icon: Mic2 },
-  { id: 3, label: "Style & Captions", icon: Wand2 },
+  { id: 3, label: "Video Model", icon: Wand2 },
   { id: 4, label: "Generate", icon: Sparkles },
 ];
 
@@ -67,18 +67,87 @@ const emotions = [
   { label: "Mysterious", emoji: "🎭" },
 ];
 
-const captionStyles = [
-  { id: "neon", name: "Neon Pop", preview: "WATCH THIS", color: "#A78BFA" },
-  { id: "bold", name: "Bold Drop", preview: "Watch This", color: "#EC4899" },
-  { id: "clean", name: "Clean White", preview: "Watch this", color: "#FFFFFF" },
-  { id: "fire", name: "Fire Mode", preview: "WATCH THIS 🔥", color: "#F59E0B" },
-];
-
-const backgrounds = [
-  { id: "citynight", name: "City Night", gradient: "linear-gradient(135deg, #0d0025, #001020)" },
-  { id: "abstract", name: "Abstract Flow", gradient: "linear-gradient(135deg, #1a0035, #001a30)" },
-  { id: "forest", name: "Mystic Forest", gradient: "linear-gradient(135deg, #001505, #0a1000)" },
-  { id: "cosmic", name: "Cosmic", gradient: "linear-gradient(135deg, #05000f, #000520)" },
+const videoModels = [
+  {
+    rank: 1,
+    id: "fal-ai/longcat-video/distilled/720p",
+    category: "Best Value",
+    costPerSecond: "0.10 credit",
+    quality: "7.0/10",
+    bestFor: "Long-form anime (up to 4 min), story continuity",
+  },
+  {
+    rank: 2,
+    id: "fal-ai/longcat-video/distilled/480p",
+    category: "Ultra Budget",
+    costPerSecond: "0.05 credit",
+    quality: "6.5/10",
+    bestFor: "Drafts, prototyping, storyboarding",
+  },
+  {
+    rank: 3,
+    id: "fal-ai/wan/v2.2-5b/text-to-video/fast-wan",
+    category: "Budget 720p",
+    costPerSecond: "0.13 credit",
+    quality: "6.0/10",
+    bestFor: "Fast previews, short clips",
+  },
+  {
+    rank: 4,
+    id: "fal-ai/ltxv-13b-098-distilled",
+    category: "Long Videos",
+    costPerSecond: "0.20 credit",
+    quality: "6.5/10",
+    bestFor: "50s duration, 10 credits = 50s generation",
+  },
+  {
+    rank: 5,
+    id: "fal-ai/hunyuan-video-v1.5/text-to-video",
+    category: "Best Open Source",
+    costPerSecond: "0.08 credit",
+    quality: "7.5/10",
+    bestFor: "High quality shorts, beats commercial models",
+  },
+  {
+    rank: 6,
+    id: "fal-ai/kling-video/v2.6/pro/text-to-video",
+    category: "Premium Motion",
+    costPerSecond: "0.70 credit",
+    quality: "8.5/10",
+    bestFor: "Production quality, 3min duration",
+  },
+  {
+    rank: 7,
+    id: "fal-ai/seedance/v1.5/pro/text-to-video",
+    category: "Best Audio Sync",
+    costPerSecond: "0.52 credit",
+    quality: "8.5/10",
+    bestFor: "Lip-sync, stereo audio, 8+ languages",
+  },
+  {
+    rank: 8,
+    id: "fal-ai/pixverse/v5.6/text-to-video",
+    category: "Balanced",
+    costPerSecond: "0.70 credit",
+    quality: "7.5/10",
+    bestFor: "Flexible 360p-1080p, optional audio",
+  },
+  {
+    rank: 9,
+    id: "fal-ai/minimax/hailuo-2.3/standard/text-to-video",
+    category: "Best Physics",
+    costPerSecond: "0.47 credit",
+    quality: "8.5/10",
+    bestFor: "Realistic physics, action scenes",
+  },
+  {
+    rank: 10,
+    id: "veed/fabric-1.0/text",
+    category: "Talking Avatars",
+    costPerSecond: "0.80 credit",
+    quality: "7.0/10",
+    bestFor: "Lip-sync avatars, 60s max duration",
+  },
 ];
 
 export function CreateVideoPage() {
@@ -92,8 +161,7 @@ export function CreateVideoPage() {
   const [scriptGenerated, setScriptGenerated] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState("alex");
   const [selectedEmotion, setSelectedEmotion] = useState("Excited");
-  const [selectedCaption, setSelectedCaption] = useState("neon");
-  const [selectedBg, setSelectedBg] = useState("cosmic");
+  const [selectedVideoModel, setSelectedVideoModel] = useState(videoModels[0].id);
   const [videoGenerating, setVideoGenerating] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoReady, setVideoReady] = useState(false);
@@ -239,8 +307,7 @@ export function CreateVideoPage() {
                 trimEnd?: number;
                 playbackRate?: number;
                 captionScale?: number;
-                selectedCaption?: string;
-                selectedBg?: string;
+                selectedVideoModel?: string;
               };
               audio?: {
                 aiVoice?: {
@@ -280,8 +347,12 @@ export function CreateVideoPage() {
       if (typeof editSettings?.trimEnd === "number") setTrimEnd(editSettings.trimEnd);
       if (typeof editSettings?.playbackRate === "number") setPlaybackRate(editSettings.playbackRate);
       if (typeof editSettings?.captionScale === "number") setCaptionScale(editSettings.captionScale);
-      if (typeof editSettings?.selectedCaption === "string") setSelectedCaption(editSettings.selectedCaption);
-      if (typeof editSettings?.selectedBg === "string") setSelectedBg(editSettings.selectedBg);
+      if (
+        typeof editSettings?.selectedVideoModel === "string" &&
+        videoModels.some((model) => model.id === editSettings.selectedVideoModel)
+      ) {
+        setSelectedVideoModel(editSettings.selectedVideoModel);
+      }
 
       const aiVoice = draft.metadata?.audio?.aiVoice;
       if (typeof aiVoice?.language === "string") setBhashiniVoiceLanguage(aiVoice.language);
@@ -564,8 +635,7 @@ export function CreateVideoPage() {
             trimEnd,
             playbackRate,
             captionScale,
-            selectedCaption,
-            selectedBg,
+            selectedVideoModel,
           },
           audio: {
             aiVoice: {
@@ -1039,7 +1109,7 @@ export function CreateVideoPage() {
                     className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm font-semibold"
                     style={{ background: "linear-gradient(135deg, #8B5CF6, #06B6D4)", boxShadow: "0 4px 20px rgba(139,92,246,0.3)" }}
                   >
-                    Next: Style & Captions
+                      Next: Video Model
                     <ChevronRight className="w-4 h-4" />
                   </motion.button>
                 </div>
@@ -1056,52 +1126,28 @@ export function CreateVideoPage() {
                 className="space-y-5"
               >
                 <div className="rounded-2xl border border-white/8 bg-white/3 p-6">
-                  <h3 className="text-white text-sm font-semibold mb-4">Caption Style</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {captionStyles.map((c) => (
+                  <h3 className="text-white text-sm font-semibold mb-1">Video Generator Model</h3>
+                    <p className="text-white/40 text-xs mb-4">Pick any model based on quality and credits per second.</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto pr-1">
+                    {videoModels.map((model) => (
                       <motion.button
-                        key={c.id}
-                        whileHover={{ scale: 1.03 }}
-                        onClick={() => setSelectedCaption(c.id)}
-                        className={`p-4 rounded-xl border transition-all text-center ${
-                          selectedCaption === c.id
-                            ? "border-purple-500/40 bg-purple-500/10"
+                        key={model.id}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setSelectedVideoModel(model.id)}
+                        className={`rounded-xl border p-3 text-left transition-all ${
+                          selectedVideoModel === model.id
+                            ? "border-cyan-400/50 bg-cyan-500/10"
                             : "border-white/8 bg-white/2 hover:border-white/15"
                         }`}
                       >
-                        <p
-                          className="text-sm font-bold mb-2"
-                          style={{ color: c.color, textShadow: `0 0 10px ${c.color}60` }}
-                        >
-                          {c.preview}
-                        </p>
-                        <p className="text-white/40 text-xs">{c.name}</p>
-                      </motion.button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-white/8 bg-white/3 p-6">
-                  <h3 className="text-white text-sm font-semibold mb-4">Background Style</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {backgrounds.map((b) => (
-                      <motion.button
-                        key={b.id}
-                        whileHover={{ scale: 1.03 }}
-                        onClick={() => setSelectedBg(b.id)}
-                        className={`rounded-xl border overflow-hidden transition-all ${
-                          selectedBg === b.id
-                            ? "border-purple-500/50 ring-1 ring-purple-500/30"
-                            : "border-white/8 hover:border-white/20"
-                        }`}
-                      >
-                        <div
-                          className="h-16 w-full"
-                          style={{ background: b.gradient }}
-                        />
-                        <div className="px-2 py-1.5 bg-white/5">
-                          <p className="text-white/60 text-xs text-center">{b.name}</p>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="text-[0.65rem] font-semibold text-cyan-200">#{model.rank} {model.category}</span>
+                            <span className="text-[0.65rem] text-white/50">{model.costPerSecond}/sec</span>
                         </div>
+                        <p className="text-xs font-semibold text-white break-all">{model.id}</p>
+                        <p className="mt-1 text-[0.7rem] text-white/55">Quality: {model.quality}</p>
+                        <p className="mt-1 text-[0.7rem] text-white/45">Best for: {model.bestFor}</p>
                       </motion.button>
                     ))}
                   </div>
@@ -1163,8 +1209,10 @@ export function CreateVideoPage() {
                       {[
                         { label: "Topic", value: topic || "AI tools changing jobs" },
                         { label: "Voice", value: `${voices.find((v) => v.id === selectedVoice)?.name} — ${selectedEmotion}` },
-                        { label: "Caption Style", value: captionStyles.find((c) => c.id === selectedCaption)?.name || "" },
-                        { label: "Background", value: backgrounds.find((b) => b.id === selectedBg)?.name || "" },
+                        {
+                          label: "Model",
+                          value: videoModels.find((m) => m.id === selectedVideoModel)?.id || selectedVideoModel,
+                        },
                       ].map((s) => (
                         <div key={s.label} className="p-3 rounded-xl bg-white/4 border border-white/6">
                           <p className="text-white/35 text-xs mb-0.5">{s.label}</p>
@@ -1184,7 +1232,7 @@ export function CreateVideoPage() {
                       }}
                     >
                       <Zap className="w-4 h-4" />
-                      Generate with RetentionAI™
+                      Generate with {videoModels.find((m) => m.id === selectedVideoModel)?.category || "Selected Model"}
                     </motion.button>
                   </div>
                 )}
@@ -1241,7 +1289,7 @@ export function CreateVideoPage() {
                           borderColor: "rgba(139,92,246,0.4)",
                           aspectRatio: "9/16",
                           maxHeight: "380px",
-                          background: backgrounds.find((b) => b.id === selectedBg)?.gradient,
+                            background: "linear-gradient(135deg, #05000f, #000520)",
                           boxShadow: "0 0 50px rgba(139,92,246,0.25)",
                         }}
                       >
@@ -1255,7 +1303,7 @@ export function CreateVideoPage() {
                               className="text-white font-black text-sm mb-1"
                               style={{ textShadow: "0 2px 10px rgba(0,0,0,0.8)" }}
                             >
-                              {captionStyles.find((c) => c.id === selectedCaption)?.preview}
+                                WATCH THIS
                             </p>
                           </motion.div>
                           <div className="mt-4 w-10 h-10 rounded-full border-2 border-white/30 flex items-center justify-center">

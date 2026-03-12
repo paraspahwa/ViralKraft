@@ -21,6 +21,7 @@ export default async function handler(req, res) {
     const body = await readJsonBody(req);
     const planId = body.planId;
     const billingCycle = body.billingCycle || "monthly";
+    const purchaseType = body.purchaseType === "credits" ? "credits" : "subscription";
     const userId = body.userId || null;
     const email = body.email || null;
     const requestCountry = body.countryCode || "";
@@ -35,6 +36,7 @@ export default async function handler(req, res) {
       planId,
       billingCycle,
       countryCode: detectedCountry,
+      purchaseType,
     });
 
     // Paid orders must always be tied to a user to keep order status checks user-scoped.
@@ -48,6 +50,8 @@ export default async function handler(req, res) {
     const notes = {
       planId: selection.planId,
       billingCycle: selection.billingCycle,
+      purchaseType: selection.purchaseType,
+      credits: selection.credits || 0,
       countryCode: detectedCountry,
       userId: userId || "",
       email: email || "",

@@ -69,21 +69,24 @@ export default async function handler(req, res) {
         })
         .eq("id", orderRow.id);
 
-      await supabase.from("subscriptions").upsert(
-        {
-          user_id: orderRow.user_id,
-          plan_id: orderRow.plan_id,
-          billing_cycle: orderRow.billing_cycle,
-          status: "active",
-          current_period_start: new Date().toISOString(),
-          current_period_end: getPeriodEnd(orderRow.billing_cycle),
-          metadata: {
-            razorpay_order_id: razorpayOrderId,
-            razorpay_payment_id: razorpayPaymentId,
+      const purchaseType = orderRow?.metadata?.purchaseType || "subscription";
+      if (purchaseType === "subscription") {
+        await supabase.from("subscriptions").upsert(
+          {
+            user_id: orderRow.user_id,
+            plan_id: orderRow.plan_id,
+            billing_cycle: orderRow.billing_cycle,
+            status: "active",
+            current_period_start: new Date().toISOString(),
+            current_period_end: getPeriodEnd(orderRow.billing_cycle),
+            metadata: {
+              razorpay_order_id: razorpayOrderId,
+              razorpay_payment_id: razorpayPaymentId,
+            },
           },
-        },
-        { onConflict: "user_id" },
-      );
+          { onConflict: "user_id" },
+        );
+      }
     }
 
     if (event === "payment.failed") {

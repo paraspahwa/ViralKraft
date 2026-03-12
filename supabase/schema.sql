@@ -6,12 +6,20 @@ create table if not exists public.plans (
   description text,
   monthly_inr integer not null,
   yearly_inr integer not null,
-  monthly_usd integer not null,
-  yearly_usd integer not null,
+  monthly_usd numeric(10,2) not null,
+  yearly_usd numeric(10,2) not null,
   features jsonb not null default '[]'::jsonb,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+do $$
+begin
+  alter table public.plans alter column monthly_usd type numeric(10,2);
+  alter table public.plans alter column yearly_usd type numeric(10,2);
+exception
+  when undefined_table then null;
+end $$;
 
 create table if not exists public.payment_orders (
   id uuid primary key default gen_random_uuid(),
@@ -160,9 +168,15 @@ create policy "user_audio_delete_own"
 
 insert into public.plans (plan_id, name, description, monthly_inr, yearly_inr, monthly_usd, yearly_usd, features)
 values
-  ('starter', 'Starter', 'Creators starting their short-form engine', 1499, 14990, 29, 290, '["20 videos / month", "Basic analytics", "Email support"]'::jsonb),
-  ('growth', 'Growth', 'Teams scaling multiple campaigns every week', 3999, 39990, 79, 790, '["100 videos / month", "AI retention optimization", "Priority support"]'::jsonb),
-  ('scale', 'Scale', 'High-volume brands running full-funnel video ops', 9999, 99990, 199, 1990, '["Unlimited videos", "Team workspace", "Dedicated success manager"]'::jsonb)
+  ('free_trial', 'Free Trial', '3 videos at 480p, no card required', 0, 0, 0, 0, '["3 videos", "480p", "No card required"]'::jsonb),
+  ('starter', 'Starter', '20 videos monthly at 480p', 449, 5388, 4.99, 59.88, '["20 videos / month", "480p", "Margin target 76%"]'::jsonb),
+  ('creator', 'Creator', '50 videos monthly at 720p', 1299, 15588, 14.99, 179.88, '["50 videos / month", "720p", "Margin target 64%"]'::jsonb),
+  ('pro', 'Pro', '100 videos monthly at 720p HQ', 2599, 31188, 29.99, 359.88, '["100 videos / month", "720p HQ", "Margin target 69%"]'::jsonb),
+  ('studio', 'Studio', 'Unlimited videos at 1080p', 8499, 101988, 99.99, 1199.88, '["Unlimited videos", "1080p", "Margin target 50%"]'::jsonb),
+  ('credits_100', 'Credits 100', 'Pay-per-use credits pack', 849, 849, 9.99, 9.99, '["100 credits", "Best for 480p"]'::jsonb),
+  ('credits_250', 'Credits 250', 'Pay-per-use credits pack', 1699, 1699, 19.99, 19.99, '["250 credits", "Best for 720p"]'::jsonb),
+  ('credits_500', 'Credits 500', 'Pay-per-use credits pack', 2999, 2999, 34.99, 34.99, '["500 credits", "Best for 720p HQ"]'::jsonb),
+  ('credits_1000', 'Credits 1000', 'Pay-per-use credits pack', 5099, 5099, 59.99, 59.99, '["1000 credits", "Best for 1080p"]'::jsonb)
 on conflict (plan_id) do update
 set
   name = excluded.name,

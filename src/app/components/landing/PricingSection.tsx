@@ -16,58 +16,41 @@ import { getSupabaseBrowserClient, hasSupabaseBrowserConfig } from "../../lib/su
 
 type BillingCycle = "monthly" | "yearly";
 
-type BackendPlan = {
+type SubscriptionTier = {
   planId: string;
   name: string;
-  currency: "INR" | "USD";
-  monthly: number;
-  yearly: number;
+  videos: string;
+  resolution: string;
+  billingCycle: "monthly";
+  price: number;
+  priceUsd: number;
+  costUsd: number;
+  marginPct: number | null;
+  includedCredits: number;
   features: string[];
+};
+
+type CreditPack = {
+  packId: string;
+  name: string;
+  credits: number;
+  price: number;
+  priceUsd: number;
+  costUsd: number;
+  marginPct: number | null;
 };
 
 type PricingResponse = {
   ok: boolean;
   countryCode: string;
   pricing: {
-    currency: "INR" | "USD";
+    currency: "USD" | "INR";
+    unit: "credits";
+    usdPerCredit: number;
     partner: string;
-    plans: BackendPlan[];
+    subscriptionTiers: SubscriptionTier[];
+    creditPacks: CreditPack[];
   };
-};
-
-const FALLBACK_PRICING: PricingResponse = {
-  ok: true,
-  countryCode: "US",
-  pricing: {
-    currency: "USD",
-    partner: "fallback",
-    plans: [
-      {
-        planId: "starter",
-        name: "Starter",
-        currency: "USD",
-        monthly: 29,
-        yearly: 290,
-        features: ["20 videos / month", "Basic analytics", "Email support"],
-      },
-      {
-        planId: "growth",
-        name: "Growth",
-        currency: "USD",
-        monthly: 79,
-        yearly: 790,
-        features: ["100 videos / month", "AI retention optimization", "Priority support"],
-      },
-      {
-        planId: "scale",
-        name: "Scale",
-        currency: "USD",
-        monthly: 199,
-        yearly: 1990,
-        features: ["Unlimited videos", "Team workspace", "Dedicated success manager"],
-      },
-    ],
-  },
 };
 
 type OrderResponse = {
@@ -88,6 +71,7 @@ type OrderStatusResponse = {
   updatedAt: string;
   planId: string;
   billingCycle: BillingCycle;
+  purchaseType: "subscription" | "credits";
 };
 
 type CheckoutState = {
@@ -103,15 +87,11 @@ type UserContext = {
   accessToken: string | null;
 };
 
-type DisplayPlan = {
-  name: string;
-  backendPlanId: string;
-  icon: typeof Sparkles;
-  description: string;
-  color: string;
-  popular: boolean;
-  features: string[];
-  cta: string;
+type CheckoutTarget = {
+  id: string;
+  label: string;
+  purchaseType: "subscription" | "credits";
+  amountMajor: number;
 };
 
 type RazorpayInstance = {
@@ -126,66 +106,102 @@ declare global {
   }
 }
 
-const displayPlans: DisplayPlan[] = [
-  {
-    name: "Starter",
-    backendPlanId: "starter",
-    icon: Sparkles,
-    description: "Perfect for creators just getting started",
-    color: "#A78BFA",
-    popular: false,
-    features: [
-      "20 videos / month",
-      "Basic analytics",
-      "Email support",
-      "Basic captions",
-      "TikTok & Reels export",
-      "Watermarked output"
+const FALLBACK_PRICING: PricingResponse = {
+  ok: true,
+  countryCode: "US",
+  pricing: {
+    currency: "USD",
+    unit: "credits",
+    usdPerCredit: 0.0999,
+    partner: "fallback",
+    subscriptionTiers: [
+      {
+        planId: "free_trial",
+        name: "Free Trial",
+        videos: "3 videos",
+        resolution: "480p",
+        billingCycle: "monthly",
+        price: 0,
+        priceUsd: 0,
+        costUsd: 0.18,
+        marginPct: null,
+        includedCredits: 0,
+        features: ["3 videos", "480p export", "No credit card required"],
+      },
+      {
+        planId: "starter",
+        name: "Starter",
+        videos: "20/month",
+        resolution: "480p",
+        billingCycle: "monthly",
+        price: 4.99,
+        priceUsd: 4.99,
+        costUsd: 1.18,
+        marginPct: 76,
+        includedCredits: 49.95,
+        features: ["20 videos / month", "480p output", "Email support"],
+      },
+      {
+        planId: "creator",
+        name: "Creator",
+        videos: "50/month",
+        resolution: "720p",
+        billingCycle: "monthly",
+        price: 14.99,
+        priceUsd: 14.99,
+        costUsd: 5.45,
+        marginPct: 64,
+        includedCredits: 150.05,
+        features: ["50 videos / month", "720p output", "Priority rendering"],
+      },
+      {
+        planId: "pro",
+        name: "Pro",
+        videos: "100/month",
+        resolution: "720p HQ",
+        billingCycle: "monthly",
+        price: 29.99,
+        priceUsd: 29.99,
+        costUsd: 9.2,
+        marginPct: 69,
+        includedCredits: 300.2,
+        features: ["100 videos / month", "720p HQ output", "Priority support"],
+      },
+      {
+        planId: "studio",
+        name: "Studio",
+        videos: "Unlimited",
+        resolution: "1080p",
+        billingCycle: "monthly",
+        price: 99.99,
+        priceUsd: 99.99,
+        costUsd: 50,
+        marginPct: 50,
+        includedCredits: 1000.9,
+        features: ["Unlimited videos", "1080p output", "Team & studio controls"],
+      },
     ],
-    cta: "Start Starter"
+    creditPacks: [
+      { packId: "credits_100", name: "100 Credits", credits: 100, price: 9.99, priceUsd: 9.99, costUsd: 4.99, marginPct: 50 },
+      { packId: "credits_250", name: "250 Credits", credits: 250, price: 19.99, priceUsd: 19.99, costUsd: 9.99, marginPct: 50 },
+      { packId: "credits_500", name: "500 Credits", credits: 500, price: 34.99, priceUsd: 34.99, costUsd: 17.49, marginPct: 50 },
+      { packId: "credits_1000", name: "1000 Credits", credits: 1000, price: 59.99, priceUsd: 59.99, costUsd: 29.99, marginPct: 50 },
+    ],
   },
-  {
-    name: "Growth",
-    backendPlanId: "growth",
-    icon: Zap,
-    description: "For creators serious about going viral",
-    color: "#A78BFA",
-    popular: true,
-    features: [
-      "100 videos / month",
-      "AI retention optimization",
-      "Priority support",
-      "Animated captions",
-      "5 platform export"
-    ],
-    cta: "Start Growth"
-  },
-  {
-    name: "Scale",
-    backendPlanId: "scale",
-    icon: Building2,
-    description: "For teams, agencies & brands",
-    color: "#06B6D4",
-    popular: false,
-    features: [
-      "Unlimited videos",
-      "Team workspace",
-      "Dedicated success manager",
-      "White-label branding",
-      "API access"
-    ],
-    cta: "Start Scale"
-  }
-];
+};
 
 const CHECKOUT_ORDER_STORAGE_KEY = "viralkraft:lastCheckoutOrder";
 
-function formatCurrency(currency: "INR" | "USD", value: number) {
+function formatMoney(currency: "USD" | "INR", value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(value);
+}
+
+function formatNum(value: number) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
 }
 
 function loadRazorpayScript() {
@@ -215,32 +231,22 @@ async function getUserContext(): Promise<UserContext> {
   try {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      return {
-        userId: null,
-        accessToken: null,
-      };
+      return { userId: null, accessToken: null };
     }
 
     const { data } = await supabase.auth.getSession();
     const session = data.session;
-
     return {
       userId: session?.user?.id || null,
       accessToken: session?.access_token || null,
     };
   } catch {
-    return {
-      userId: null,
-      accessToken: null,
-    };
+    return { userId: null, accessToken: null };
   }
 }
 
 function persistPendingOrder(orderId: string) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
+  if (typeof window === "undefined") return;
   window.localStorage.setItem(
     CHECKOUT_ORDER_STORAGE_KEY,
     JSON.stringify({ orderId, createdAt: Date.now() }),
@@ -248,21 +254,15 @@ function persistPendingOrder(orderId: string) {
 }
 
 function clearPendingOrder() {
-  if (typeof window === "undefined") {
-    return;
-  }
+  if (typeof window === "undefined") return;
   window.localStorage.removeItem(CHECKOUT_ORDER_STORAGE_KEY);
 }
 
 function readPendingOrderId() {
-  if (typeof window === "undefined") {
-    return null;
-  }
+  if (typeof window === "undefined") return null;
 
   const raw = window.localStorage.getItem(CHECKOUT_ORDER_STORAGE_KEY);
-  if (!raw) {
-    return null;
-  }
+  if (!raw) return null;
 
   try {
     const parsed = JSON.parse(raw) as { orderId?: string; createdAt?: number };
@@ -271,8 +271,7 @@ function readPendingOrderId() {
       return null;
     }
 
-    const ageMs = Date.now() - parsed.createdAt;
-    if (ageMs > 1000 * 60 * 30) {
+    if (Date.now() - parsed.createdAt > 1000 * 60 * 30) {
       clearPendingOrder();
       return null;
     }
@@ -288,10 +287,9 @@ export function PricingSection() {
   const navigate = useNavigate();
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });
-  const [yearly, setYearly] = useState(false);
   const [pricing, setPricing] = useState<PricingResponse | null>(null);
   const [loadingPricing, setLoadingPricing] = useState(true);
-  const [checkoutPlanId, setCheckoutPlanId] = useState<string | null>(null);
+  const [checkoutItemId, setCheckoutItemId] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [checkoutState, setCheckoutState] = useState<CheckoutState>({
@@ -301,8 +299,6 @@ export function PricingSection() {
     status: "pending",
     action: "close",
   });
-
-  const billingCycle: BillingCycle = yearly ? "yearly" : "monthly";
 
   useEffect(() => {
     let mounted = true;
@@ -323,7 +319,7 @@ export function PricingSection() {
       }
     }
 
-    loadAuthState();
+    void loadAuthState();
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
@@ -333,9 +329,7 @@ export function PricingSection() {
       };
     }
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsSignedIn(Boolean(session?.user?.id));
       setAuthReady(true);
     });
@@ -363,8 +357,6 @@ export function PricingSection() {
         }
       } catch {
         if (isMounted) {
-          // Vite-only local dev does not serve serverless /api routes.
-          // Use a stable catalog fallback so pricing cards remain usable.
           setPricing(FALLBACK_PRICING);
         }
       } finally {
@@ -374,32 +366,32 @@ export function PricingSection() {
       }
     }
 
-    fetchPricing();
+    void fetchPricing();
     return () => {
       isMounted = false;
     };
   }, []);
 
+  const subscriptionTiers = useMemo(
+    () => pricing?.pricing.subscriptionTiers || FALLBACK_PRICING.pricing.subscriptionTiers,
+    [pricing],
+  );
+
+  const creditPacks = useMemo(
+    () => pricing?.pricing.creditPacks || FALLBACK_PRICING.pricing.creditPacks,
+    [pricing],
+  );
+
+  const currency = pricing?.pricing.currency || "USD";
+
   useEffect(() => {
     const pendingOrderId = readPendingOrderId();
-    if (!pendingOrderId) {
-      return;
-    }
+    if (!pendingOrderId) return;
 
     toast.info("Resuming your last payment check...");
     void pollOrderStatus(pendingOrderId);
-    // We only want this to run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const backendPlanMap = useMemo(() => {
-    const map = new Map<string, BackendPlan>();
-    const plans = pricing?.pricing.plans || [];
-    plans.forEach((plan) => {
-      map.set(plan.planId, plan);
-    });
-    return map;
-  }, [pricing]);
 
   async function pollOrderStatus(orderId: string) {
     const user = await getUserContext();
@@ -407,18 +399,14 @@ export function PricingSection() {
     setCheckoutState({
       open: true,
       title: "Confirming payment",
-      message: "We are activating your plan. This usually takes a few seconds.",
+      message: "We are activating your purchase. This usually takes a few seconds.",
       status: "pending",
       action: "close",
     });
 
     for (let attempt = 0; attempt < 20; attempt += 1) {
       const response = await fetch(`/api/order-status?orderId=${encodeURIComponent(orderId)}`, {
-        headers: user.accessToken
-          ? {
-              Authorization: `Bearer ${user.accessToken}`,
-            }
-          : {},
+        headers: user.accessToken ? { Authorization: `Bearer ${user.accessToken}` } : {},
       });
 
       if (!response.ok) {
@@ -445,11 +433,13 @@ export function PricingSection() {
         setCheckoutState({
           open: true,
           title: "Payment successful",
-          message: "Your subscription is active. Continue to your dashboard.",
+          message: data.purchaseType === "credits"
+            ? "Your credit pack payment is confirmed."
+            : "Your subscription is active. Continue to your dashboard.",
           status: "success",
           action: "dashboard",
         });
-        toast.success("Payment confirmed. Subscription activated.");
+        toast.success("Payment confirmed.");
         return;
       }
 
@@ -479,28 +469,21 @@ export function PricingSection() {
     toast.info("Payment is still being processed.");
   }
 
-  async function handleCheckout(plan: DisplayPlan) {
-    if (!pricing) {
-      return;
-    }
-
+  async function handleCheckout(target: CheckoutTarget) {
     try {
-      setCheckoutPlanId(plan.backendPlanId);
+      setCheckoutItemId(target.id);
       toast.info("Initializing secure checkout...");
 
       const user = await getUserContext();
-      const planPricing = backendPlanMap.get(plan.backendPlanId);
-      const selectedAmount = billingCycle === "yearly" ? planPricing?.yearly : planPricing?.monthly;
-
-      if (typeof selectedAmount === "number" && selectedAmount > 0 && !user.userId) {
+      if (target.amountMajor > 0 && !user.userId) {
         setCheckoutState({
           open: true,
           title: "Sign in required",
-          message: "Please sign in before purchasing a paid plan.",
+          message: "Please sign in before purchasing.",
           status: "failed",
           action: "signin",
         });
-        toast.error("Please sign in to continue with paid checkout.");
+        toast.error("Please sign in to continue checkout.");
         return;
       }
 
@@ -513,9 +496,10 @@ export function PricingSection() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          planId: plan.backendPlanId,
-          billingCycle,
-          countryCode: pricing.countryCode,
+          planId: target.id,
+          purchaseType: target.purchaseType,
+          billingCycle: "monthly",
+          countryCode: pricing?.countryCode || "US",
           userId: user.userId,
         }),
       });
@@ -535,7 +519,7 @@ export function PricingSection() {
         currency: orderData.currency,
         order_id: orderData.orderId,
         name: "ViralKraft",
-        description: `${plan.name} (${billingCycle})`,
+        description: target.label,
         theme: { color: "#8B5CF6" },
         handler: () => {
           toast.success("Payment submitted. Verifying status...");
@@ -567,7 +551,7 @@ export function PricingSection() {
       });
       toast.error(error instanceof Error ? error.message : "Checkout failed");
     } finally {
-      setCheckoutPlanId(null);
+      setCheckoutItemId(null);
     }
   }
 
@@ -580,18 +564,18 @@ export function PricingSection() {
         }}
       />
 
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto space-y-10">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.6 }}
-          className="text-center mb-12"
+          className="text-center"
         >
           <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-300 text-xs mb-4">
-            💎 Transparent Pricing — No Hidden Fees, Ever
+            Simple, Transparent Pricing
           </span>
           <h2
-            className="text-white mb-4"
+            className="text-white mb-3"
             style={{
               fontFamily: "Space Grotesk, sans-serif",
               fontSize: "clamp(1.8rem, 4vw, 2.8rem)",
@@ -600,203 +584,132 @@ export function PricingSection() {
               letterSpacing: "-0.02em",
             }}
           >
-            Simple Pricing.{" "}
-            <span
-              style={{
-                background: "linear-gradient(135deg, #A78BFA, #06B6D4)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
-              Instant Refunds.
-            </span>{" "}
-            No Surprises.
+            Subscription Tiers + Credit Packs
           </h2>
-          <p className="text-white/50 text-sm mb-6">Unlike competitors — we show you exactly what you pay. Cancel anytime in 2 clicks.</p>
-
-          {/* Billing toggle */}
-          <div className="inline-flex items-center gap-3 p-1 rounded-xl bg-white/5 border border-white/8">
-            <button
-              onClick={() => setYearly(false)}
-              className={`px-5 py-2 rounded-lg text-sm transition-all ${
-                !yearly ? "bg-purple-500/30 text-purple-200 border border-purple-500/30" : "text-white/40"
-              }`}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setYearly(true)}
-              className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm transition-all ${
-                yearly ? "bg-purple-500/30 text-purple-200 border border-purple-500/30" : "text-white/40"
-              }`}
-            >
-              Yearly
-              <span className="px-1.5 py-0.5 rounded-full text-[0.6rem] bg-green-500/20 text-green-400 border border-green-500/25">
-                Save 35%
-              </span>
-            </button>
-          </div>
+          <p className="text-cyan-300/85 text-xs">1 credit = $0.0999</p>
+          <p className="text-white/45 text-xs mt-2">Choose a subscription or buy credits anytime.</p>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {displayPlans.map((plan, i) => {
-            const Icon = plan.icon;
-            const backendPlan = backendPlanMap.get(plan.backendPlanId);
-            const currency = pricing?.pricing.currency || "USD";
-            const monthly = backendPlan?.monthly;
-            const yearlyPrice = backendPlan?.yearly;
-            const currentPrice = billingCycle === "yearly" ? yearlyPrice : monthly;
-            const hasPrice = typeof currentPrice === "number";
-            const isPaidPlan = Boolean((monthly ?? 0) > 0 || (yearlyPrice ?? 0) > 0);
-            const signInRequiredForCheckout = authReady && !isSignedIn && isPaidPlan && plan.backendPlanId !== "starter";
+        <div>
+          <h3 className="text-white text-lg font-semibold mb-4">Subscriptions</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+            {subscriptionTiers.map((tier, i) => {
+              const icon = tier.planId === "creator" ? Zap : tier.planId === "studio" ? Building2 : Sparkles;
+              const Icon = icon;
+              const isPopular = tier.planId === "creator";
+              const isFree = tier.price <= 0;
+              const requiresSignIn = authReady && !isSignedIn && !isFree;
 
-            return (
-              <motion.div
-                key={plan.name}
-                initial={{ opacity: 0, y: 30 }}
-                animate={inView ? { opacity: 1, y: 0 } : {}}
-                transition={{ delay: i * 0.12, duration: 0.6 }}
-                whileHover={{ y: -5 }}
-                className={`relative rounded-2xl p-6 border overflow-hidden transition-all duration-300 ${
-                  plan.popular
-                    ? "border-purple-500/40 bg-gradient-to-b from-purple-500/10 to-purple-900/5"
-                    : "border-white/8 bg-white/3"
-                }`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                    <div
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-white text-xs font-medium"
-                      style={{ background: "linear-gradient(135deg, #8B5CF6, #06B6D4)" }}
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      Most Popular
+              return (
+                <motion.div
+                  key={tier.planId}
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={inView ? { opacity: 1, y: 0 } : {}}
+                  transition={{ delay: i * 0.08, duration: 0.45 }}
+                  className={`relative rounded-2xl p-5 border ${isPopular ? "border-purple-500/40 bg-purple-500/10" : "border-white/10 bg-white/5"}`}
+                >
+                  {isPopular && (
+                    <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[0.65rem] bg-purple-500 text-white">Most Popular</span>
+                  )}
+
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center">
+                      <Icon className="w-4 h-4 text-cyan-300" />
+                    </div>
+                    <div>
+                      <p className="text-white text-sm font-semibold">{tier.name}</p>
+                      <p className="text-white/50 text-[0.68rem]">{tier.videos} • {tier.resolution}</p>
                     </div>
                   </div>
-                )}
 
-                {/* Top border glow */}
-                <div
-                  className="absolute top-0 left-4 right-4 h-px"
-                  style={{ background: `linear-gradient(90deg, transparent, ${plan.color}60, transparent)` }}
-                />
+                  <p className="text-white text-2xl font-extrabold leading-none">{formatMoney(currency, tier.price)}</p>
+                  <p className="text-white/45 text-[0.7rem] mt-1">per month</p>
 
-                <div className="flex items-center gap-3 mb-5">
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center"
-                    style={{ background: `${plan.color}18`, border: `1px solid ${plan.color}25` }}
-                  >
-                    <Icon className="w-4.5 h-4.5" style={{ color: plan.color }} />
+                  <div className="mt-3 space-y-1 text-[0.7rem]">
+                    <p className="text-cyan-300">Credits equivalent: {formatNum(tier.includedCredits)}</p>
                   </div>
-                  <div>
-                    <h3
-                      className="text-white"
-                      style={{ fontFamily: "Space Grotesk, sans-serif", fontWeight: 700, fontSize: "1rem" }}
-                    >
-                      {plan.name}
-                    </h3>
-                    <p className="text-white/35 text-xs">{plan.description}</p>
-                  </div>
-                </div>
 
-                {/* Price */}
-                <div className="mb-5">
-                  <div className="flex items-end gap-1.5">
-                    <span
-                      className="text-white"
-                      style={{
-                        fontFamily: "Space Grotesk, sans-serif",
-                        fontSize: "2.8rem",
-                        fontWeight: 800,
-                        lineHeight: 1,
-                      }}
-                    >
-                      {hasPrice ? formatCurrency(currency, currentPrice) : loadingPricing ? "..." : "N/A"}
-                    </span>
-                    {hasPrice && (
-                      <span className="text-white/35 text-sm mb-1">/month</span>
-                    )}
-                  </div>
-                  {hasPrice && billingCycle === "yearly" && typeof monthly === "number" && typeof yearlyPrice === "number" && (
-                    <p className="text-green-400 text-xs mt-1">
-                      Save {formatCurrency(currency, (monthly - yearlyPrice) * 12)}/year
-                    </p>
-                  )}
-                </div>
+                  <ul className="mt-3 mb-4 space-y-1.5">
+                    {tier.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-[0.7rem] text-white/65">
+                        <Check className="w-3.5 h-3.5 mt-0.5 text-cyan-300" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
 
-                {/* Features */}
-                <ul className="flex flex-col gap-2 mb-6">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2">
-                      <Check className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: plan.color }} />
-                      <span className="text-white/60 text-xs">{f}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {/* CTA */}
-                <motion.button
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  disabled={loadingPricing || !backendPlan || checkoutPlanId === plan.backendPlanId}
-                  onClick={() => {
-                    if (plan.backendPlanId === "starter") {
-                      if (authReady && !isSignedIn) {
+                  <Button
+                    className="w-full"
+                    disabled={loadingPricing || checkoutItemId === tier.planId}
+                    onClick={() => {
+                      if (tier.planId === "free_trial") {
                         navigate("/login?next=/dashboard");
                         return;
                       }
-                      navigate("/dashboard");
-                      return;
-                    }
-                    void handleCheckout(plan);
-                  }}
-                  className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
-                  style={
-                    plan.popular
-                      ? {
-                          background: "linear-gradient(135deg, #8B5CF6, #06B6D4)",
-                          color: "white",
-                          boxShadow: "0 4px 20px rgba(139,92,246,0.3)",
-                        }
-                      : {
-                          background: "rgba(255,255,255,0.06)",
-                          color: "rgba(255,255,255,0.7)",
-                          border: "1px solid rgba(255,255,255,0.1)",
-                        }
-                  }
-                >
-                  {checkoutPlanId === plan.backendPlanId
-                    ? "Opening Checkout..."
-                    : signInRequiredForCheckout
-                      ? "Sign in to Buy"
-                      : plan.cta}
-                </motion.button>
 
-                {signInRequiredForCheckout && (
-                  <p className="mt-2 text-[0.68rem] text-amber-300/90 text-center">
-                    Sign in required for paid checkout
-                  </p>
-                )}
-              </motion.div>
-            );
-          })}
+                      void handleCheckout({
+                        id: tier.planId,
+                        label: `${tier.name} subscription`,
+                        purchaseType: "subscription",
+                        amountMajor: tier.price,
+                      });
+                    }}
+                  >
+                    {checkoutItemId === tier.planId
+                      ? "Opening Checkout..."
+                      : requiresSignIn
+                        ? "Sign in to Buy"
+                        : tier.planId === "free_trial"
+                          ? "Start Free Trial"
+                          : `Choose ${tier.name}`}
+                  </Button>
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={inView ? { opacity: 1 } : {}}
-          transition={{ delay: 0.7 }}
-          className="mt-8 flex flex-wrap justify-center gap-5"
-        >
-          {[
-            "✅ No credit card for free trial",
-            "✅ Instant refunds within 48h",
-            "✅ Cancel in 2 clicks",
-            "✅ No hidden fees. Ever.",
-          ].map((t) => (
-            <span key={t} className="text-white/35 text-xs">{t}</span>
-          ))}
-        </motion.div>
+        <div>
+          <h3 className="text-white text-lg font-semibold mb-4">Pay-Per-Use Credits</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {creditPacks.map((pack, i) => {
+              const requiresSignIn = authReady && !isSignedIn;
+              return (
+                <motion.div
+                  key={pack.packId}
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={inView ? { opacity: 1, y: 0 } : {}}
+                  transition={{ delay: i * 0.08, duration: 0.45 }}
+                  className="rounded-2xl p-5 border border-cyan-500/25 bg-cyan-500/5"
+                >
+                  <p className="text-white font-semibold">{pack.name}</p>
+                  <p className="text-white/50 text-xs mt-0.5">{pack.credits} credits</p>
+                  <p className="text-white text-2xl font-extrabold mt-2">{formatMoney(currency, pack.price)}</p>
+
+                  <Button
+                    className="w-full mt-4"
+                    variant="outline"
+                    disabled={loadingPricing || checkoutItemId === pack.packId}
+                    onClick={() => {
+                      void handleCheckout({
+                        id: pack.packId,
+                        label: `${pack.name} credit pack`,
+                        purchaseType: "credits",
+                        amountMajor: pack.price,
+                      });
+                    }}
+                  >
+                    {checkoutItemId === pack.packId
+                      ? "Opening Checkout..."
+                      : requiresSignIn
+                        ? "Sign in to Buy"
+                        : `Buy ${pack.credits} Credits`}
+                  </Button>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <Dialog
@@ -810,9 +723,7 @@ export function PricingSection() {
         <DialogContent className="border-white/15 bg-[#0f0b22] text-white">
           <DialogHeader>
             <DialogTitle>{checkoutState.title}</DialogTitle>
-            <DialogDescription className="text-white/65">
-              {checkoutState.message}
-            </DialogDescription>
+            <DialogDescription className="text-white/65">{checkoutState.message}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             {checkoutState.status === "success" && (
