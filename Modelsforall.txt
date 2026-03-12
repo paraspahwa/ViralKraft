@@ -1,0 +1,66 @@
+Some Models : 
+fal-ai/cosmos-predict-2.5/distilled/text-to-video - 0.08$ for 5 Secs - without Audio
+fal-ai/ltx-2.3/text-to-video/fast - 0.04$ for 1 sec - with audio 
+fal-ai/heygen/avatar3/digital-twin - Your request will cost $0.034 per output video second.
+fal-ai/heygen/v2/video-agent - Your request will cost $0.034 per output video second.
+fal-ai/vidu/q3/text-to-video/turbo - Your request will cost 0.035 $ per video second for 360p and 540 p, cost will be 2.2x for 720p and 1080p resolution.
+fal-ai/kling-video/o3/pro/text-to-video - For every second of video you generated, you will be charged $0.112 (audio off) or $0.14 (audio on). For example, a 5s video with audio on will cost $0.70
+fal-ai/kling-video/o3/standard/text-to-video - For every second of video you generated, you will be charged $0.084 (audio off) or $0.112 (audio on). For example, a 5s video with audio on will cost $0.56
+fal-ai/kling-video/v3/standard/text-to-video - For every second of video you generated, you will be charged $0.084 (audio off) or $0.126 (audio on), if voice control is used while generating audio you will be charged $0.154. For example, a 5s video with audio on and voice control will cost $0.77
+
+ANime : 
+xai/grok-imagine-video/text-to-video - For 6s 480p video your request will cost $0.3. At an output resolution of 480p, every second costs $0.05, and at 720p, every second costs $0.07
+Pixverse :
+fal-ai/pixverse/v5.6/text-to-video - For a 5s video without audio, your request will cost $0.35 for 360p and 540p, $0.45 for 720p, and $0.75 for 1080p. Enabling audio adds $0.45 for 360p/540p/720p, and $0.75 for 1080p. For 8-second videos, costs are 2x the 5-second base; for 10-second videos, costs are 2.2x the 5-second base for 360p/540p and 720p (1080p not supported for 10s).
+fal-ai/pixverse/v5/text-to-video -  For 5s video your request will cost $0.15 for 360p and 540p, $0.2 for 720p and $0.4 for 1080p. For $1 you can run this model with approximately 2 times.
+
+generate as per megapixels -
+fal-ai/ltx-2-19b/distilled/text-to-video/lora - Your request will cost $0.001 per megapixel of generated video data (width × height × frames), rounded up. For example, if you generate a video that is 121 frames long at 1280 × 720, your total generated video is ≈112 MP, and your request will cost $0.112.
+
+fal-ai/ltx-2-19b/distilled/text-to-video - Your request will cost $0.0008 per megapixel of generated video data (width × height × frames), rounded up. For example, if you generate a video that is 121 frames long at 1280 × 720, your total generated video is ≈112 MP, and your request will cost $0.0896.
+
+
+fal-ai/bytedance/seedance/v1.5/pro/text-to-video - Each 720p 5 second video with audio costs roughly $0.26. For other resolutions, 1 million video tokens with audio costs $2.4. Without audio, the price is 1.2 per millition tokens. tokens(video) = (height x width x FPS x duration) / 1024.
+
+wan/v2.6/text-to-video - Your request will cost $0.10 per second for 720p, $0.15 per second for 1080p.
+
+veed/fabric-1.0/text - 480p - $0.08 per second, 720p - $0.15 per second
+
+fal-ai/kling-video/v2.6/pro/text-to-video - For every second of video you generated, you will be charged $0.07 (audio off) or $0.14 (audio on). For example, a 5s video with audio on will cost $0.70
+
+fal-ai/pixverse/v5.5/text-to-video - For a 5s video in single-clip mode without audio, your request will cost $0.15 for 360p and 540p, $0.2 for 720p, and $0.4 for 1080p. Enabling audio adds $0.05, and multi-clip mode adds $0.10 (or $0.15 with audio). For 8-second videos, costs double; for 10-second videos, costs are 2.2x the 5-second base (1080p not supported for 10s). For $1 you can run this model with approximately 2 times.
+
+fal-ai/ltx-2/text-to-video/fast - Your request will cost $0.04 per second for 1080p, $0.08 per second for 1440p or $0.16 per second for 2160p.
+
+fal-ai/hunyuan-video-v1.5/text-to-video - Current pricing is 0.075 cents/s of video, more resolutions arriving soon.
+
+fal-ai/longcat-video/text-to-video/720p - Your request will cost $0.04 per generated second of video. Generated seconds are calculated at 30 frames per second.
+fal-ai/longcat-video/text-to-video/480p - Your request will cost $0.025 per generated second of video. Generated seconds are calculated at 15 frames per second.
+
+fal-ai/longcat-video/distilled/text-to-video/720p - Your request will cost $0.01 per generated second of video. Generated seconds are calculated at 30 frames per second.  //////////////////
+fal-ai/longcat-video/distilled/text-to-video/480p - Your request will cost $0.005 per generated second of video. Generated seconds are calculated at 15 frames per second. //////////////////
+
+fal-ai/ltxv-13b-098-distilled - Your request will cost $0.02 per second, billed at 24 frames per second. For $1 you can generate 50 seconds of video. Enabling detail_pass will double the billed seconds.
+fal-ai/ltxv-13b-098-distilled/multiconditioning - Your request will cost $0.02 per second, billed at 24 frames per second. For $1 you can generate 50 seconds of video. Enabling detail_pass will double the billed seconds.
+
+fal-ai/kandinsky5/text-to-video/distill - 768x512 - Your request will cost $0.05 for a 5-second video and $0.10 for a 10-second video, regardless of resolution.
+fal-ai/kandinsky5/text-to-video -768x512 - Your request will cost $0.08 for a 5-second video and $0.16 for a 10-second video, regardless of resolution.
+
+fal-ai/minimax/hailuo-2.3/standard/text-to-video - Your request will cost $0.28 per 6 second video generation, and a $0.56 per 10 second video generation.
+
+fal-ai/bytedance/seedance/v1/pro/fast/text-to-video - Each 1080p 5 second video costs roughly $0.245. For other resolutions, 1 million video tokens costs $1. tokens(video) = (height x width x FPS x duration) / 1024.
+
+fal-ai/krea-wan-14b/text-to-video - Generation will cost $0.025 per output video second. Video seconds are calculated at 16 frames per second.
+
+fal-ai/wan-25-preview/text-to-video - Your request will cost $0.05 per second for 480p, $0.10 per second for 720p, $0.15 per second for 1080p.
+
+fal-ai/kling-video/v2.5-turbo/standard/image-to-video - For 5s video your request will cost $0.21. For every additional second you will be charged $0.042.
+
+argil/avatars/text-to-video -  UGC - Your request will cost $0.0225 per input second.
+
+fal-ai/wan/v2.2-5b/text-to-video/distill - Your request will cost $0.08 per video.
+fal-ai/wan/v2.2-5b/text-to-video/fast-wan - Your request will cost $0.025 per video for 720p, $0.01875 per video for 580p, $0.0125 per video for 480p.
+
+fal-ai/wan/v2.2-a14b/text-to-video - Your request will cost $0.08 per video second for 720p, $0.06 per video second for 580p, $0.04 per video second for 480p. Video seconds are calculated at 16 frames per second.
+
+
