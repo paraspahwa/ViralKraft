@@ -647,6 +647,11 @@ export function PricingSection() {
                         return;
                       }
 
+                      if (requiresSignIn) {
+                        navigate("/login?next=/dashboard");
+                        return;
+                      }
+
                       void handleCheckout({
                         id: tier.planId,
                         label: `${tier.name} subscription`,
@@ -691,6 +696,11 @@ export function PricingSection() {
                     variant="outline"
                     disabled={loadingPricing || checkoutItemId === pack.packId}
                     onClick={() => {
+                      if (requiresSignIn) {
+                        navigate("/login?next=/dashboard");
+                        return;
+                      }
+
                       void handleCheckout({
                         id: pack.packId,
                         label: `${pack.name} credit pack`,

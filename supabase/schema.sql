@@ -50,6 +50,36 @@ create table if not exists public.subscriptions (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.credit_wallets (
+  user_id uuid primary key,
+  balance numeric(12,2) not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.credit_transactions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  transaction_type text not null check (transaction_type in ('credit_purchase', 'video_generation_debit', 'refund', 'adjustment')),
+  amount numeric(12,2) not null,
+  balance_after numeric(12,2) not null,
+  reference_type text,
+  reference_id text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists credit_transactions_user_created_idx
+  on public.credit_transactions (user_id, created_at desc);
+
+create unique index if not exists credit_transactions_order_purchase_unique_idx
+  on public.credit_transactions (transaction_type, reference_type, reference_id)
+  where transaction_type = 'credit_purchase' and reference_type = 'order';
+
+create unique index if not exists credit_transactions_generation_refund_unique_idx
+  on public.credit_transactions (transaction_type, reference_type, reference_id)
+  where transaction_type = 'refund' and reference_type = 'generation';
+
 create table if not exists public.videos (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null,

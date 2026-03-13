@@ -8,7 +8,7 @@ import { getSupabaseBrowserClient, hasSupabaseBrowserConfig } from "../lib/supab
 import {
   Sparkles, TrendingUp, Play, Eye, Clock, MoreHorizontal,
   Zap, Brain, Plus, BarChart3, Video, Star, Flame,
-  Globe2, Smartphone, Monitor, ArrowUpRight, Bell, Settings
+  Globe2, Smartphone, Monitor, ArrowUpRight, Bell, Settings, Wallet
 } from "lucide-react";
 
 const recentVideos = [
@@ -71,6 +71,14 @@ type VideoRow = {
   user_id: string;
 };
 
+type WalletTransaction = {
+  id: string;
+  transactionType: string;
+  amount: number;
+  balanceAfter: number;
+  createdAt: string;
+};
+
 function toRelativeTime(timestamp: string) {
   const ms = Date.now() - new Date(timestamp).getTime();
   const minutes = Math.floor(ms / 60000);
@@ -105,6 +113,8 @@ export function DashboardPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [liveRecentVideos, setLiveRecentVideos] = useState<DashboardVideo[]>(recentVideos);
   const [debugSyncing, setDebugSyncing] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
 
   async function getSessionWithRetry() {
     const supabase = getSupabaseBrowserClient();
@@ -277,6 +287,57 @@ export function DashboardPage() {
     };
 
     void checkAdminAccess();
+
+    return () => {
+      mounted = false;
+    };
+  }, [isAuthorized]);
+
+  useEffect(() => {
+    if (!isAuthorized) {
+      setWalletBalance(null);
+      setWalletTransactions([]);
+      return;
+    }
+
+    let mounted = true;
+
+    const loadWallet = async () => {
+      const session = await getSessionWithRetry();
+      const token = session?.access_token;
+      if (!token) {
+        return;
+      }
+
+      const response = await fetch("/api/wallet-transactions?limit=8", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        balance?: number;
+        transactions?: WalletTransaction[];
+      };
+
+      if (!mounted || !payload.ok) {
+        return;
+      }
+
+      if (typeof payload.balance === "number") {
+        setWalletBalance(payload.balance);
+      }
+      if (Array.isArray(payload.transactions)) {
+        setWalletTransactions(payload.transactions);
+      }
+    };
+
+    void loadWallet();
 
     return () => {
       mounted = false;
@@ -572,6 +633,67 @@ export function DashboardPage() {
 
             {/* Right sidebar */}
             <div className="flex flex-col gap-5">
+              {/* RetentionAI score */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.38 }}
+                className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-5"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-cyan-300" />
+                    <h3 className="text-white text-sm font-semibold">Credit Wallet</h3>
+                  </div>
+                  <button
+                    onClick={() => navigate("/#pricing")}
+                    className="text-[0.65rem] rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-2 py-1 text-cyan-200 hover:border-cyan-300/50"
+                  >
+                    Buy Credits
+                  </button>
+                </div>
+
+                <div className="mb-4 rounded-xl border border-white/8 bg-white/4 px-3 py-2.5">
+                  <p className="text-white/45 text-[0.65rem] uppercase tracking-wide">Available Balance</p>
+                  <p className="text-cyan-200 text-xl font-bold" style={{ fontFamily: "Space Grotesk, sans-serif" }}>
+                    {walletBalance === null ? "--" : `${walletBalance} credits`}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {walletTransactions.length === 0 ? (
+                    <p className="text-white/35 text-xs">No credit activity yet.</p>
+                  ) : (
+                    walletTransactions.slice(0, 5).map((tx) => {
+                      const isDebit = tx.amount < 0;
+                      const amountLabel = `${isDebit ? "" : "+"}${tx.amount.toFixed(2)}`;
+                      const txLabel = tx.transactionType === "credit_purchase"
+                        ? "Credit purchase"
+                        : tx.transactionType === "video_generation_debit"
+                        ? "Video generation"
+                        : tx.transactionType === "refund"
+                        ? "Refund"
+                        : "Adjustment";
+
+                      return (
+                        <div key={tx.id} className="flex items-center justify-between rounded-lg border border-white/6 bg-black/20 px-2.5 py-2">
+                          <div>
+                            <p className="text-white/75 text-[0.72rem] font-medium">{txLabel}</p>
+                            <p className="text-white/35 text-[0.62rem]">{toRelativeTime(tx.createdAt)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-[0.72rem] font-semibold ${isDebit ? "text-orange-300" : "text-green-300"}`}>
+                              {amountLabel}
+                            </p>
+                            <p className="text-white/35 text-[0.62rem]">Bal {tx.balanceAfter}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </motion.div>
+
               {/* RetentionAI score */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}

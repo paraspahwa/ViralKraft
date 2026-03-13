@@ -16,5 +16,6 @@ export function assertRequiredEnv() {
 export function getPublicConfig() {
   return {
     razorpayKeyId: process.env.RAZORPAY_KEY_ID || "",
+    falConfigured: Boolean(process.env.FAL_API_KEY),
   };
 }

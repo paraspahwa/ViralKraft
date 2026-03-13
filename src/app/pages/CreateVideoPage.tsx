@@ -67,12 +67,14 @@ const emotions = [
   { label: "Mysterious", emoji: "🎭" },
 ];
 
+const USD_PER_CREDIT = 0.0999;
+
 const videoModels = [
   {
     rank: 1,
     id: "fal-ai/longcat-video/distilled/720p",
     category: "Best Value",
-    costPerSecond: "0.10 credit",
+    usdPerSecond: 0.01,
     quality: "7.0/10",
     bestFor: "Long-form anime (up to 4 min), story continuity",
   },
@@ -80,7 +82,7 @@ const videoModels = [
     rank: 2,
     id: "fal-ai/longcat-video/distilled/480p",
     category: "Ultra Budget",
-    costPerSecond: "0.05 credit",
+    usdPerSecond: 0.005,
     quality: "6.5/10",
     bestFor: "Drafts, prototyping, storyboarding",
   },
@@ -88,7 +90,7 @@ const videoModels = [
     rank: 3,
     id: "fal-ai/wan/v2.2-5b/text-to-video/fast-wan",
     category: "Budget 720p",
-    costPerSecond: "0.13 credit",
+    usdPerSecond: 0.0125,
     quality: "6.0/10",
     bestFor: "Fast previews, short clips",
   },
@@ -96,7 +98,7 @@ const videoModels = [
     rank: 4,
     id: "fal-ai/ltxv-13b-098-distilled",
     category: "Long Videos",
-    costPerSecond: "0.20 credit",
+    usdPerSecond: 0.02,
     quality: "6.5/10",
     bestFor: "50s duration, 10 credits = 50s generation",
   },
@@ -104,7 +106,7 @@ const videoModels = [
     rank: 5,
     id: "fal-ai/hunyuan-video-v1.5/text-to-video",
     category: "Best Open Source",
-    costPerSecond: "0.08 credit",
+    usdPerSecond: 0.0075,
     quality: "7.5/10",
     bestFor: "High quality shorts, beats commercial models",
   },
@@ -112,7 +114,7 @@ const videoModels = [
     rank: 6,
     id: "fal-ai/kling-video/v2.6/pro/text-to-video",
     category: "Premium Motion",
-    costPerSecond: "0.70 credit",
+    usdPerSecond: 0.07,
     quality: "8.5/10",
     bestFor: "Production quality, 3min duration",
   },
@@ -120,7 +122,7 @@ const videoModels = [
     rank: 7,
     id: "fal-ai/seedance/v1.5/pro/text-to-video",
     category: "Best Audio Sync",
-    costPerSecond: "0.52 credit",
+    usdPerSecond: 0.052,
     quality: "8.5/10",
     bestFor: "Lip-sync, stereo audio, 8+ languages",
   },
@@ -128,7 +130,7 @@ const videoModels = [
     rank: 8,
     id: "fal-ai/pixverse/v5.6/text-to-video",
     category: "Balanced",
-    costPerSecond: "0.70 credit",
+    usdPerSecond: 0.07,
     quality: "7.5/10",
     bestFor: "Flexible 360p-1080p, optional audio",
   },
@@ -136,7 +138,7 @@ const videoModels = [
     rank: 9,
     id: "fal-ai/minimax/hailuo-2.3/standard/text-to-video",
     category: "Best Physics",
-    costPerSecond: "0.47 credit",
+    usdPerSecond: 0.047,
     quality: "8.5/10",
     bestFor: "Realistic physics, action scenes",
   },
@@ -144,11 +146,26 @@ const videoModels = [
     rank: 10,
     id: "veed/fabric-1.0/text",
     category: "Talking Avatars",
-    costPerSecond: "0.80 credit",
+    usdPerSecond: 0.08,
     quality: "7.0/10",
     bestFor: "Lip-sync avatars, 60s max duration",
   },
 ];
+
+const durationOptions = [
+  { label: "10 Sec", seconds: 10 },
+  { label: "30 Sec", seconds: 30 },
+  { label: "1 Min", seconds: 60 },
+  { label: "2 Min", seconds: 120 },
+];
+
+function getCreditsFor10Sec(usdPerSecond: number) {
+  return (usdPerSecond * 10) / USD_PER_CREDIT;
+}
+
+function toFixedCredits(value: number) {
+  return Number(value.toFixed(2));
+}
 
 export function CreateVideoPage() {
   const navigate = useNavigate();
@@ -162,9 +179,15 @@ export function CreateVideoPage() {
   const [selectedVoice, setSelectedVoice] = useState("alex");
   const [selectedEmotion, setSelectedEmotion] = useState("Excited");
   const [selectedVideoModel, setSelectedVideoModel] = useState(videoModels[0].id);
+  const [selectedDurationSeconds, setSelectedDurationSeconds] = useState(10);
+  const [creditsUsed, setCreditsUsed] = useState(0);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [videoGenerating, setVideoGenerating] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoReady, setVideoReady] = useState(false);
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
+  const [generationProvider, setGenerationProvider] = useState<string | null>(null);
+  const [falRequestId, setFalRequestId] = useState<string | null>(null);
   const [retentionScore, setRetentionScore] = useState(0);
   const [savedVideoId, setSavedVideoId] = useState<string | null>(null);
   const [isSavingEdits, setIsSavingEdits] = useState(false);
@@ -308,6 +331,12 @@ export function CreateVideoPage() {
                 playbackRate?: number;
                 captionScale?: number;
                 selectedVideoModel?: string;
+                selectedDurationSeconds?: number;
+                estimatedCreditsToDeduct?: number;
+                totalCreditsUsed?: number;
+                generatedVideoUrl?: string;
+                generationProvider?: string;
+                falRequestId?: string;
               };
               audio?: {
                 aiVoice?: {
@@ -352,6 +381,24 @@ export function CreateVideoPage() {
         videoModels.some((model) => model.id === editSettings.selectedVideoModel)
       ) {
         setSelectedVideoModel(editSettings.selectedVideoModel);
+      }
+      if (
+        typeof editSettings?.selectedDurationSeconds === "number" &&
+        durationOptions.some((option) => option.seconds === editSettings.selectedDurationSeconds)
+      ) {
+        setSelectedDurationSeconds(editSettings.selectedDurationSeconds);
+      }
+      if (typeof editSettings?.totalCreditsUsed === "number") {
+        setCreditsUsed(editSettings.totalCreditsUsed);
+      }
+      if (typeof editSettings?.generatedVideoUrl === "string" && editSettings.generatedVideoUrl.trim()) {
+        setGeneratedVideoUrl(editSettings.generatedVideoUrl);
+      }
+      if (typeof editSettings?.generationProvider === "string" && editSettings.generationProvider.trim()) {
+        setGenerationProvider(editSettings.generationProvider);
+      }
+      if (typeof editSettings?.falRequestId === "string" && editSettings.falRequestId.trim()) {
+        setFalRequestId(editSettings.falRequestId);
       }
 
       const aiVoice = draft.metadata?.audio?.aiVoice;
@@ -466,17 +513,6 @@ export function CreateVideoPage() {
     }
   }
 
-  if (isCheckingAuth || !isAuthorized) {
-    return (
-      <div className="relative min-h-screen" style={{ fontFamily: "Space Grotesk, Inter, sans-serif" }}>
-        <CinematicBackground />
-        <div className="relative" style={{ zIndex: 1 }}>
-          <AppNavbar />
-        </div>
-      </div>
-    );
-  }
-
   const generateScript = async () => {
     if (!topic.trim()) return;
     setGenerating(true);
@@ -511,29 +547,200 @@ export function CreateVideoPage() {
   };
 
   const handleGenerate = async () => {
-    setVideoGenerating(true);
-    setVideoProgress(0);
-    const intervals = [
-      { target: 18, msg: "Analyzing script with RetentionAI™...", delay: 600 },
-      { target: 35, msg: "Rendering 9:16 scenes...", delay: 800 },
-      { target: 52, msg: "Synthesizing AI voice...", delay: 700 },
-      { target: 71, msg: "Adding animated captions...", delay: 600 },
-      { target: 88, msg: "Optimizing for TikTok algorithm...", delay: 700 },
-      { target: 100, msg: "Finalizing your video...", delay: 500 },
-    ];
-    for (const step of intervals) {
-      await new Promise((r) => setTimeout(r, step.delay));
-      setVideoProgress(step.target);
+    const selectedModel = videoModels.find((model) => model.id === selectedVideoModel) || videoModels[0];
+    const creditsFor10Sec = getCreditsFor10Sec(selectedModel.usdPerSecond);
+    const estimatedCredits = toFixedCredits(creditsFor10Sec * (selectedDurationSeconds / 10));
+    const generationReferenceId = `${selectedModel.id}-${selectedDurationSeconds}-${Date.now()}`;
+
+    const session = await getSessionWithRetry();
+    const token = session?.access_token;
+    if (!token) {
+      toast.error("Please sign in again to consume credits.");
+      return;
     }
-    await new Promise((r) => setTimeout(r, 600));
-    setRetentionScore(Math.floor(Math.random() * 8) + 82); // 82-89
-    setVideoGenerating(false);
-    setVideoReady(true);
-    setSavedVideoId(null);
-    setTrimStart(0);
-    setTrimEnd(60);
-    setPlaybackRate(1);
-    setCaptionScale(100);
+
+    const consumeResponse = await fetch("/api/consume-credits", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        modelId: selectedModel.id,
+        durationSeconds: selectedDurationSeconds,
+        referenceId: generationReferenceId,
+      }),
+    });
+
+    const consumePayload = (await consumeResponse.json()) as {
+      deductedCredits?: number;
+      balance?: number;
+      availableCredits?: number;
+      requiredCredits?: number;
+      error?: string;
+    };
+
+    if (!consumeResponse.ok) {
+      if (consumeResponse.status === 402) {
+        toast.error(
+          `Insufficient credits. Need ${consumePayload.requiredCredits || estimatedCredits}, have ${consumePayload.availableCredits || 0}.`,
+        );
+      } else {
+        toast.error(consumePayload.error || "Could not deduct credits for generation.");
+      }
+      return;
+    }
+
+    const creditsToDeduct = toFixedCredits(consumePayload.deductedCredits || estimatedCredits);
+    if (typeof consumePayload.balance === "number") {
+      setWalletBalance(consumePayload.balance);
+    }
+
+    try {
+      setVideoGenerating(true);
+      setVideoProgress(0);
+      setVideoReady(false);
+      setGeneratedVideoUrl(null);
+      setGenerationProvider(null);
+      setFalRequestId(null);
+
+      const intervals = [
+        { target: 18, delay: 600 },
+        { target: 35, delay: 800 },
+        { target: 52, delay: 700 },
+        { target: 71, delay: 600 },
+        { target: 88, delay: 700 },
+        { target: 100, delay: 500 },
+      ];
+
+      const animateProgress = async () => {
+        for (const step of intervals) {
+          await new Promise((r) => setTimeout(r, step.delay));
+          setVideoProgress(step.target);
+        }
+      };
+
+      const generationPromise = (async () => {
+        const response = await fetch("/api/generate-video", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            modelId: selectedModel.id,
+            durationSeconds: selectedDurationSeconds,
+            topic,
+            script,
+          }),
+        });
+
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          provider?: string;
+          requestId?: string;
+          videoUrl?: string;
+          error?: string;
+        };
+
+        if (!response.ok || !payload.ok || !payload.videoUrl) {
+          throw new Error(payload.error || "Video generation failed");
+        }
+
+        return payload;
+      })();
+
+      const [generationPayload] = await Promise.all([generationPromise, animateProgress()]);
+
+      await new Promise((r) => setTimeout(r, 500));
+      setRetentionScore(Math.floor(Math.random() * 8) + 82); // 82-89
+      setVideoGenerating(false);
+      setVideoReady(true);
+      setGeneratedVideoUrl(generationPayload.videoUrl || null);
+      setGenerationProvider(generationPayload.provider || null);
+      setFalRequestId(generationPayload.requestId || null);
+      setSavedVideoId(null);
+      setTrimStart(0);
+      setTrimEnd(selectedDurationSeconds);
+      setPlaybackRate(1);
+      setCaptionScale(100);
+      setCreditsUsed((prev) => toFixedCredits(prev + creditsToDeduct));
+      toast.success(`${creditsToDeduct} credits deducted for ${selectedDurationSeconds}s generation.`);
+    } catch (error) {
+      setVideoGenerating(false);
+      setVideoProgress(0);
+
+      let refundOutcome: {
+        refunded: boolean;
+        reused: boolean;
+      } = {
+        refunded: false,
+        reused: false,
+      };
+
+      try {
+        const refundResponse = await fetch("/api/refund-credits", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            referenceId: generationReferenceId,
+          }),
+        });
+
+        const refundPayload = (await refundResponse.json()) as {
+          ok?: boolean;
+          refundedCredits?: number;
+          balance?: number;
+          reused?: boolean;
+        };
+
+        if (refundResponse.ok && refundPayload.ok) {
+          refundOutcome = {
+            refunded: typeof refundPayload.refundedCredits === "number" && refundPayload.refundedCredits > 0,
+            reused: Boolean(refundPayload.reused),
+          };
+
+          if (typeof refundPayload.balance === "number") {
+            setWalletBalance(refundPayload.balance);
+          }
+        }
+      } catch {
+        // Best effort rollback; if this fails, manual support can still reconcile ledger.
+      }
+
+      const message = error instanceof Error ? error.message : "Video generation failed";
+      if (refundOutcome.refunded || refundOutcome.reused) {
+        toast.error(`${message} Deducted credits were refunded automatically.`);
+      } else {
+        toast.error(`${message} Credit refund could not be confirmed automatically.`);
+      }
+    }
+  };
+
+  const handleOpenGeneratedVideo = () => {
+    if (!generatedVideoUrl) {
+      toast.error("No generated video URL is available yet.");
+      return;
+    }
+
+    window.open(generatedVideoUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleCopyGeneratedVideoLink = async () => {
+    if (!generatedVideoUrl) {
+      toast.error("No generated video URL is available yet.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(generatedVideoUrl);
+      toast.success("Video link copied to clipboard.");
+    } catch {
+      toast.error("Could not copy video link.");
+    }
   };
 
   const saveEditSettings = async () => {
@@ -636,6 +843,12 @@ export function CreateVideoPage() {
             playbackRate,
             captionScale,
             selectedVideoModel,
+            selectedDurationSeconds,
+            estimatedCreditsToDeduct,
+            totalCreditsUsed: creditsUsed,
+            generatedVideoUrl,
+            generationProvider,
+            falRequestId,
           },
           audio: {
             aiVoice: {
@@ -763,6 +976,64 @@ export function CreateVideoPage() {
   const currentLabel = Object.entries(progressLabels)
     .filter(([k]) => parseInt(k) <= videoProgress)
     .pop()?.[1] ?? "Preparing...";
+
+  const activeModel = videoModels.find((model) => model.id === selectedVideoModel) || videoModels[0];
+  const activeModelCreditsFor10Sec = toFixedCredits(getCreditsFor10Sec(activeModel.usdPerSecond));
+  const estimatedCreditsToDeduct = toFixedCredits(activeModelCreditsFor10Sec * (selectedDurationSeconds / 10));
+  const modelUsedUsdCost = Number((estimatedCreditsToDeduct * USD_PER_CREDIT).toFixed(4));
+  const gpuServerlessUsdCost = 0;
+  const voiceRenderingUsdCost = 0;
+  const totalGenerationUsdCost = Number(
+    (modelUsedUsdCost + gpuServerlessUsdCost + voiceRenderingUsdCost).toFixed(4),
+  );
+
+  useEffect(() => {
+    if (!isAuthorized) {
+      return;
+    }
+
+    let mounted = true;
+
+    const loadWalletBalance = async () => {
+      const session = await getSessionWithRetry();
+      const token = session?.access_token;
+      if (!token) {
+        return;
+      }
+
+      const response = await fetch("/api/wallet-balance", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as { ok?: boolean; balance?: number };
+      if (mounted && payload.ok && typeof payload.balance === "number") {
+        setWalletBalance(payload.balance);
+      }
+    };
+
+    void loadWalletBalance();
+
+    return () => {
+      mounted = false;
+    };
+  }, [isAuthorized]);
+
+  if (isCheckingAuth || !isAuthorized) {
+    return (
+      <div className="relative min-h-screen" style={{ fontFamily: "Space Grotesk, Inter, sans-serif" }}>
+        <CinematicBackground />
+        <div className="relative" style={{ zIndex: 1 }}>
+          <AppNavbar />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen" style={{ fontFamily: "Space Grotesk, Inter, sans-serif" }}>
@@ -1127,7 +1398,7 @@ export function CreateVideoPage() {
               >
                 <div className="rounded-2xl border border-white/8 bg-white/3 p-6">
                   <h3 className="text-white text-sm font-semibold mb-1">Video Generator Model</h3>
-                    <p className="text-white/40 text-xs mb-4">Pick any model based on quality and credits per second.</p>
+                  <p className="text-white/40 text-xs mb-4">Pick any model based on quality and credits per 10-second block.</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto pr-1">
                     {videoModels.map((model) => (
                       <motion.button
@@ -1143,13 +1414,41 @@ export function CreateVideoPage() {
                       >
                         <div className="mb-1 flex items-center justify-between gap-2">
                           <span className="text-[0.65rem] font-semibold text-cyan-200">#{model.rank} {model.category}</span>
-                            <span className="text-[0.65rem] text-white/50">{model.costPerSecond}/sec</span>
+                          <span className="text-[0.65rem] text-white/50">{toFixedCredits(getCreditsFor10Sec(model.usdPerSecond))} credits / 10s</span>
                         </div>
                         <p className="text-xs font-semibold text-white break-all">{model.id}</p>
                         <p className="mt-1 text-[0.7rem] text-white/55">Quality: {model.quality}</p>
                         <p className="mt-1 text-[0.7rem] text-white/45">Best for: {model.bestFor}</p>
                       </motion.button>
                     ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/8 bg-white/3 p-6">
+                  <h3 className="text-white text-sm font-semibold mb-2">Video Duration</h3>
+                  <p className="text-white/40 text-xs mb-4">Model pricing is based on 10s blocks. Credits are deducted by selected duration.</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {durationOptions.map((option) => (
+                      <button
+                        key={option.seconds}
+                        onClick={() => setSelectedDurationSeconds(option.seconds)}
+                        className={`rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
+                          selectedDurationSeconds === option.seconds
+                            ? "border-cyan-400/50 bg-cyan-500/10 text-cyan-200"
+                            : "border-white/8 bg-white/2 text-white/60 hover:border-white/20"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-4 rounded-xl border border-cyan-400/20 bg-cyan-500/5 p-3">
+                    <p className="text-[0.7rem] text-white/60">Estimated credit deduction</p>
+                    <p className="text-sm font-semibold text-cyan-200">{estimatedCreditsToDeduct} credits for {selectedDurationSeconds}s</p>
+                    <p className="text-[0.68rem] text-white/45 mt-1">Rate: {activeModelCreditsFor10Sec} credits / 10s × {selectedDurationSeconds / 10} blocks</p>
+                    {walletBalance !== null && (
+                      <p className="text-[0.68rem] text-white/45 mt-1">Wallet balance: {walletBalance} credits</p>
+                    )}
                   </div>
                 </div>
 
@@ -1209,16 +1508,41 @@ export function CreateVideoPage() {
                       {[
                         { label: "Topic", value: topic || "AI tools changing jobs" },
                         { label: "Voice", value: `${voices.find((v) => v.id === selectedVoice)?.name} — ${selectedEmotion}` },
+                        { label: "Duration", value: `${selectedDurationSeconds}s` },
                         {
                           label: "Model",
                           value: videoModels.find((m) => m.id === selectedVideoModel)?.id || selectedVideoModel,
                         },
+                        { label: "Credits", value: `${estimatedCreditsToDeduct} to deduct` },
                       ].map((s) => (
                         <div key={s.label} className="p-3 rounded-xl bg-white/4 border border-white/6">
                           <p className="text-white/35 text-xs mb-0.5">{s.label}</p>
                           <p className="text-white text-xs font-medium truncate">{s.value}</p>
                         </div>
                       ))}
+                    </div>
+
+                    <div className="mb-7 rounded-xl border border-cyan-400/20 bg-cyan-500/5 p-3 text-left">
+                      <p className="text-[0.65rem] uppercase tracking-wide text-cyan-200/80 mb-2">Cost Breakdown</p>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between text-white/70">
+                          <span>GPU (Serverless)</span>
+                          <span>${gpuServerlessUsdCost.toFixed(4)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-white/70">
+                          <span>Voice Rendering</span>
+                          <span>${voiceRenderingUsdCost.toFixed(4)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-white/70">
+                          <span>Model Used ({activeModel.id})</span>
+                          <span>${modelUsedUsdCost.toFixed(4)}</span>
+                        </div>
+                        <div className="my-1 h-px bg-white/10" />
+                        <div className="flex items-center justify-between text-cyan-200 font-semibold">
+                          <span>Total</span>
+                          <span>${totalGenerationUsdCost.toFixed(4)}</span>
+                        </div>
+                      </div>
                     </div>
 
                     <motion.button
@@ -1232,8 +1556,9 @@ export function CreateVideoPage() {
                       }}
                     >
                       <Zap className="w-4 h-4" />
-                      Generate with {videoModels.find((m) => m.id === selectedVideoModel)?.category || "Selected Model"}
+                      Generate {selectedDurationSeconds}s • {estimatedCreditsToDeduct} credits
                     </motion.button>
+                    <p className="text-[0.68rem] text-white/45 mt-3">Session credits used: {creditsUsed}</p>
                   </div>
                 )}
 
@@ -1279,6 +1604,12 @@ export function CreateVideoPage() {
                       </div>
                       <h3 className="text-white font-semibold mb-1">Your Video is Ready! 🎉</h3>
                       <p className="text-white/40 text-xs">Optimized by RetentionAI™ — ready for TikTok, Reels & Shorts</p>
+                      {generationProvider && (
+                        <p className="text-white/35 text-[0.68rem] mt-2">
+                          Rendered via {generationProvider}
+                          {falRequestId ? ` • Request ${falRequestId}` : ""}
+                        </p>
+                      )}
                     </div>
 
                     {/* Mockup phone */}
@@ -1342,21 +1673,32 @@ export function CreateVideoPage() {
                     <div className="grid grid-cols-3 gap-3">
                       <motion.button
                         whileHover={{ scale: 1.03 }}
+                        onClick={handleOpenGeneratedVideo}
                         className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/8 bg-white/3 text-white/60 hover:text-white transition-all text-xs"
                       >
                         <Download className="w-4 h-4" />
-                        Download 4K
+                        Open Video
                       </motion.button>
                       <motion.button
                         whileHover={{ scale: 1.03 }}
+                        onClick={() => void handleCopyGeneratedVideoLink()}
                         className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/8 bg-white/3 text-white/60 hover:text-white transition-all text-xs"
                       >
                         <Share2 className="w-4 h-4" />
-                        Share Now
+                        Copy Link
                       </motion.button>
                       <motion.button
                         whileHover={{ scale: 1.03 }}
-                        onClick={() => { setVideoReady(false); setVideoProgress(0); setStep(1); setScript(""); setScriptGenerated(false); }}
+                        onClick={() => {
+                          setVideoReady(false);
+                          setVideoProgress(0);
+                          setGeneratedVideoUrl(null);
+                          setGenerationProvider(null);
+                          setFalRequestId(null);
+                          setStep(1);
+                          setScript("");
+                          setScriptGenerated(false);
+                        }}
                         className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-white/8 bg-white/3 text-white/60 hover:text-white transition-all text-xs"
                       >
                         <RotateCcw className="w-4 h-4" />

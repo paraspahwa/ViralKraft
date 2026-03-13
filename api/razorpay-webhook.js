@@ -1,4 +1,5 @@
 import { assertRequiredEnv } from "./_lib/env.js";
+import { getOrCreateWallet, roundCredits } from "./_lib/credits.js";
 import { handleOptions, readRawBody, sendJson } from "./_lib/http.js";
 import { verifyWebhookSignature } from "./_lib/razorpay.js";
 import { getSupabaseAdmin } from "./_lib/supabase.js";
@@ -86,6 +87,43 @@ export default async function handler(req, res) {
           },
           { onConflict: "user_id" },
         );
+      }
+
+      if (purchaseType === "credits" && orderRow.user_id) {
+        const orderReference = String(razorpayOrderId || "");
+        const { data: existingCreditTx } = await supabase
+          .from("credit_transactions")
+          .select("id")
+          .eq("transaction_type", "credit_purchase")
+          .eq("reference_type", "order")
+          .eq("reference_id", orderReference)
+          .maybeSingle();
+
+        if (!existingCreditTx) {
+          const credits = Number(orderRow?.metadata?.credits || 0);
+          if (credits > 0) {
+            const wallet = await getOrCreateWallet(supabase, orderRow.user_id);
+            const nextBalance = roundCredits(Number(wallet.balance || 0) + credits);
+
+            await supabase
+              .from("credit_wallets")
+              .update({ balance: nextBalance, updated_at: new Date().toISOString() })
+              .eq("user_id", orderRow.user_id);
+
+            await supabase.from("credit_transactions").insert({
+              user_id: orderRow.user_id,
+              transaction_type: "credit_purchase",
+              amount: credits,
+              balance_after: nextBalance,
+              reference_type: "order",
+              reference_id: orderReference,
+              metadata: {
+                plan_id: orderRow.plan_id,
+                razorpay_payment_id: razorpayPaymentId,
+              },
+            });
+          }
+        }
       }
     }
 

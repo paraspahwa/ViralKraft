@@ -11,7 +11,12 @@
 - `GET /api/health` - service health and public payment key check.
 - `GET /api/geo-ip` - resolves caller geo from forwarded IP.
 - `GET /api/pricing` - returns subscription tiers plus credit-pack catalog.
+- `GET /api/wallet-balance` - returns authenticated user's current credit balance.
+- `GET /api/wallet-transactions` - returns authenticated user's recent credit ledger entries.
+- `POST /api/consume-credits` - deducts credits for a generation request (model + duration).
+- `POST /api/refund-credits` - refunds generation debit credits by reference id (idempotent rollback).
 - `POST /api/generate-script` - generates 60s short-form script using GPT-4o mini.
+- `POST /api/generate-video` - submits a Fal.ai GPU video generation request and returns rendered video URL.
 - `POST /api/create-order` - creates Razorpay order and stores pending order in Supabase.
 - `POST /api/razorpay-webhook` - verifies signature and updates order/subscription state.
 
@@ -37,6 +42,7 @@
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `OPENAI_API_KEY`
    - `OPENAI_MODEL` (default: `gpt-4o-mini`)
+   - `FAL_API_KEY`
    - `RAZORPAY_KEY_ID`
    - `RAZORPAY_KEY_SECRET`
    - `RAZORPAY_WEBHOOK_SECRET`
